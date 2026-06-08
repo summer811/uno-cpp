@@ -354,6 +354,7 @@ void startGame() {
         } else {
             msg = "轮到你了!"; FlushBatchDraw();
             bool acted = false;
+            { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} } // 清空AI回合积累的鼠标事件
             while (!acted && !hasWinner(game)) {
                 ExMessage em;
                 while (peekmessage(&em, EM_MOUSE)) {
@@ -500,6 +501,7 @@ void multipleGame() {
             }
             else if (cmd == "YOUR_TURN") {
                 myTurn = true; acted = false; statusMsg = "轮到你了!";
+                { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} } // 清空回合外积累的鼠标事件
                 Card top = localGame.discardPile.empty() ? Card{Color::None,Rank::Num0} : localGame.discardPile.back();
                 int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
                 bool hp = false; for (Card& c : localGame.players[hidx].hand) if (canPlay(c, top, localGame.currentColor)) { hp = true; break; }
