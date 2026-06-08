@@ -19,6 +19,8 @@
 #include "music.h"
 #include "picture.h"
 #pragma comment(lib,"winmm.lib")
+#pragma comment(linker, "/SUBSYSTEM:WINDOWS") /*设置程序无控制窗口，直接监听图像界面*/
+#pragma comment(linker, "/ENTRY:mainCRTStartup")    /*入口仍保留int main函数*/
 #include <graphics.h>
 #include "ai.h"
 #include "network.h"
@@ -83,9 +85,9 @@ private:
     int fontSize;
 public:
     Button(int _x, int _y, int _w, int _h, LPCTSTR _text,
-        COLORREF _normal = RGB(0, 160, 255),
-        COLORREF _hover = RGB(70, 200, 255),
-        COLORREF _press = RGB(0, 100, 200))
+        COLORREF _normal = RGB(245, 158, 11),
+        COLORREF _hover = RGB(234, 179, 8),
+        COLORREF _press = RGB(249, 115, 22))
         : x(_x), y(_y), w(_w), h(_h), text(_text),
         normalColor(_normal), hoverColor(_hover), pressColor(_press),
         textColor(WHITE), hovering(false), pressing(false), enabled(true), fontSize(25) {}
@@ -107,7 +109,7 @@ public:
         }
         setfillcolor(drawColor);
         fillroundrect(x, y, x + w, y + h, 8, 8);
-        setlinecolor(RGB(0, 100, 200));
+        setlinecolor(RGB(245, 158, 11));
         setlinestyle(PS_SOLID, 2);
         roundrect(x, y, x + w, y + h, 8, 8);
         setbkmode(TRANSPARENT);
@@ -433,7 +435,7 @@ void multipleGame() {
     localGame.direction = 1;
     localGame.currentPlayer = 0;
     int myPlayerId = -1;
-    bool gameStarted = false, myTurn = false, acted = false;
+    bool gameStarted = false, myTurn = false, acted = false, quitGame = false;
     vector<string> playerNames(4, "?");
     string statusMsg = "等待服务端...";
     localGame.players.resize(4);
@@ -469,7 +471,14 @@ void multipleGame() {
             string rest = (p == string::npos) ? "" : msg.substr(p + 1);
 
             if (cmd == "WELCOME") { myPlayerId = stoi(rest); }
-            else if (cmd == "GAME_START") { gameStarted = true; statusMsg = "游戏开始!"; localGame.players.resize(4); welcome.playMusic(); welcomeDone = false; musicTimer = GetTickCount(); }
+            else if (cmd == "GAME_START") 
+            {   gameStarted = true; 
+                statusMsg = "游戏开始!"; 
+                localGame.players.resize(4); 
+                welcome.playMusic(); 
+                welcomeDone = false; 
+                musicTimer = GetTickCount(); 
+            }
             else if (cmd == "PLAYER_LIST") { std::istringstream ss(rest); string e; while (getline(ss, e, '|')) { size_t c = e.find(':'); if (c != string::npos) { int pid = stoi(e.substr(0,c)); if (pid < 4) playerNames[pid] = e.substr(c+1); } } }
             else if (cmd == "STATE") {
                 std::istringstream ss(rest); string sc,sd,scp,sz,stc,sr;
@@ -516,24 +525,27 @@ void multipleGame() {
 
         if (!networkIsConnected()) break;
 
-        // Mouse input
-        if (gameStarted && myTurn && !acted) {
+        // Input: 键盘 + 鼠标（使用 EasyX 图形窗口消息，而非 _kbhit 控制台输入）
+        {
             ExMessage em;
-            while (peekmessage(&em, EM_MOUSE)) {
-                if (em.message != WM_LBUTTONUP) continue;
-                int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
-                int hit = hitTestCard(em.x, em.y, (int)localGame.players[hidx].hand.size());
-                if (hit >= 0) {
-                    Card& card = localGame.players[hidx].hand[hit];
-                    if (isWildCard(card)) {
-                        Color ch = showColorPicker(); string cs;
-                        if (ch == Color::Red) cs = "Red"; else if (ch == Color::Yellow) cs = "Yellow";
-                        else if (ch == Color::Green) cs = "Green"; else cs = "Blue";
-                        networkSend("PLAY|" + to_string(hit) + "|" + cs);
-                    } else { networkSend("PLAY|" + to_string(hit) + "|None"); }
-                    acted = true; myTurn = false; break;
+            while (peekmessage(&em, EM_MOUSE | EM_KEY)) {
+                if (em.message == WM_KEYDOWN && em.vkcode == VK_ESCAPE)
+                    { quitGame = true; break; }
+                if (gameStarted && myTurn && !acted && em.message == WM_LBUTTONUP) {
+                    int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
+                    int hit = hitTestCard(em.x, em.y, (int)localGame.players[hidx].hand.size());
+                    if (hit >= 0) {
+                        Card& card = localGame.players[hidx].hand[hit];
+                        if (isWildCard(card)) {
+                            Color ch = showColorPicker(); string cs;
+                            if (ch == Color::Red) cs = "Red"; else if (ch == Color::Yellow) cs = "Yellow";
+                            else if (ch == Color::Green) cs = "Green"; else cs = "Blue";
+                            networkSend("PLAY|" + to_string(hit) + "|" + cs);
+                        } else { networkSend("PLAY|" + to_string(hit) + "|None"); }
+                        acted = true; myTurn = false; break;
+                    }
+                    if (isInRect(em.x, em.y, DRAW_X, DRAW_Y, CARD_W, CARD_H)) { networkSend("DRAW"); acted = true; myTurn = false; break; }
                 }
-                if (isInRect(em.x, em.y, DRAW_X, DRAW_Y, CARD_W, CARD_H)) { networkSend("DRAW"); acted = true; myTurn = false; break; }
             }
         }
 
@@ -557,7 +569,7 @@ void multipleGame() {
             setSmoothFont(12,_T("SimSun")); outtextxy(250,y+10,_T("ESC 退出"));
         }
         FlushBatchDraw(); Sleep(16);
-        if (_kbhit() && _getch() == 27) break;
+        if (quitGame) break;
     }
 
     EndBatchDraw(); networkDisconnect();
@@ -570,7 +582,7 @@ void multipleGame() {
  * 程序入口 main() 直接调用 openMenu()。
  */
 void openMenu() {
-    initgraph(800, 600);
+    initgraph(800, 600,NOCLOSE);
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     BeginBatchDraw();
     Button sp(300,140,200,60,_T("单人游戏"));
@@ -593,4 +605,8 @@ void openMenu() {
     EndBatchDraw(); closegraph();
 }
 
-int main() { openMenu(); return 0; }
+int main()
+{   
+    openMenu();
+    return 0;
+}
