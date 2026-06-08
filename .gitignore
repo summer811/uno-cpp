@@ -1,0 +1,35 @@
+# 1. Visual Studio 编译生成的中间文件 (最重要，避免上传巨量的临时文件)
+Debug/
+Release/
+x64/
+x86/
+.vs/
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.idb
+*.tlog
+*.log
+*.db
+*.ipdb
+*.iobj
+*.unsuccessfulbuild
+
+# 2. Visual Studio 用户特定的配置 (这些通常包含你自己的路径，不应提交)
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.filters
+# 3. AI 生成或临时目录 (你截图里的 .deepseek 文件夹)
+.deepseek/
+
+# 4. 服务器生成的文件 (如果你在 server 文件夹里编译了东西)
+server/*.filters
+server/*.user
+
+# 5. 其他可能的临时文件
+*.tmp
+*.bak
+*.hpp

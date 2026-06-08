@@ -1,0 +1,254 @@
+﻿/*
+ * UNO 服务端主程序
+ * ================
+ * 基于 select 模型的 TCP 服务端，支持最多 4 人同时连接。
+ *
+ * 工作流程：
+ * 1. 创建监听 socket，绑定 8888 端口
+ * 2. select() 轮询监听 socket 和已有客户端
+ * 3. 新连接 → 分配空闲 slot（4 个），发送 WELCOME
+ * 4. 客户端消息 → processMessage() 处理
+ * 5. 管理命令从后台线程读取，互斥锁同步
+ *
+ * 玩家槽位：固定 4 个 (slot 0-3)，每个 slot 可以单独连接/断开。
+ * nextConnectedPlayer() 确保轮次只经过在线的 slot。
+ */
+
+#include "server.h"
+#include <iostream>
+#include <cstdio>
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <string>
+#include <sstream>
+#include <winsock2.h>
+#include <windows.h>
+
+#pragma comment(lib, "ws2_32.lib")
+
+ServerGameState g_game;
+std::string g_messageBuffer;
+static std::queue<std::string> g_adminQueue;
+static std::mutex g_adminMutex;
+static bool g_serverRunning = true;
+
+void serverSendTo(int clientId, const std::string& message) {
+    if (clientId < 0 || clientId >= (int)g_game.players.size()) return;
+    if (!g_game.players[clientId].connected) return;
+    std::string full = message + "\n";
+    send(g_game.players[clientId].socket, full.c_str(), (int)full.size(), 0);
+}
+
+void serverBroadcast(const std::string& message, int excludeId) {
+    for (size_t i = 0; i < g_game.players.size(); ++i) {
+        if ((int)i == excludeId) continue;
+        if (!g_game.players[i].connected) continue;
+        serverSendTo((int)i, message);
+    }
+    printf("[B] %s\n", message.c_str());
+}
+
+bool recvLine(SOCKET s, std::string& line) {
+    char buf[1]; line.clear(); int timeout = 0;
+    while (timeout < 200) {
+        int r = recv(s, buf, 1, 0);
+        if (r == SOCKET_ERROR) return false;
+        if (r == 0) return false;
+        if (buf[0] == '\n') return true;
+        if (buf[0] == '\r') continue;
+        line += buf[0]; timeout++;
+    }
+    return true;
+}
+
+/*
+ * adminInputThread —— 后台管理命令线程
+ * 独立线程运行，读取标准输入（getchar），
+ * 将输入压入 g_adminQueue，主循环轮询处理。
+ * 支持命令：op start / op kick / op list / op quit
+ */
+void adminInputThread() {
+    printf("Commands: op start | op kick name | op list | op quit\n");
+    std::string line;
+    while (g_serverRunning) {
+        line.clear(); int c;
+        while ((c = getchar()) != '\n' && c != EOF)
+            if (c != '\r') line += (char)c;
+        if (line.empty()) continue;
+        { std::lock_guard<std::mutex> lock(g_adminMutex); g_adminQueue.push(line); }
+        if (line == "op quit") break;
+    }
+}
+
+/*
+ * processAdminCommand —— 执行管理命令
+ * op start：检查在线人数 ≥ MIN_PLAYERS，发牌、初始化、广播 GAME_START
+ * op kick name：查找玩家，发 ERROR|Kicked 并断开 socket
+ * op list：打印在线玩家列表
+ * op quit：设 g_serverRunning=false，关闭主循环
+ */
+void processAdminCommand(const std::string& cmd) {
+    std::istringstream ss(cmd);
+    std::string op, arg; ss >> op >> arg;
+    if (op != "op") return;
+
+    if (arg == "start") {
+        if (g_game.gameStarted) { printf("Already started\n"); return; }
+        int readyCount = 0;
+        for (auto& p : g_game.players)
+            if (p.connected && !p.name.empty()) readyCount++;
+        if (readyCount < MIN_PLAYERS) {
+            printf("Need %d+ players (have %d)\n", MIN_PLAYERS, readyCount);
+            return;
+        }
+        g_game.gameStarted = true;
+        printf("Game started, %d players\n", readyCount);
+
+        g_game.drawPile = ruleCreateUnoDeck();
+        ruleShuffleDeck(g_game.drawPile);
+        for (size_t i = 0; i < g_game.players.size(); ++i) {
+            if (!g_game.players[i].connected) continue;
+            g_game.players[i].hand.clear();
+            for (int j = 0; j < 7; ++j) {
+                if (g_game.drawPile.empty()) {
+                    RuleCard top = g_game.discardPile.back();
+                    g_game.discardPile.pop_back();
+                    g_game.drawPile.insert(g_game.drawPile.end(),
+                        g_game.discardPile.begin(), g_game.discardPile.end());
+                    g_game.discardPile.clear(); g_game.discardPile.push_back(top);
+                    ruleShuffleDeck(g_game.drawPile);
+                }
+                g_game.players[i].hand.push_back(g_game.drawPile.back());
+                g_game.drawPile.pop_back();
+            }
+        }
+        initDiscardPile();
+        g_game.currentPlayer = 0; g_game.direction = 1; g_game.turnCount = 0;
+        serverBroadcast("GAME_START");
+        broadcastGameState(); broadcastHands(); notifyCurrentTurn();
+
+    } else if (arg == "kick") {
+        std::string name; std::getline(ss, name);
+        while (!name.empty() && name[0] == ' ') name.erase(0, 1);
+        if (name.empty()) { printf("Usage: op kick name\n"); return; }
+        for (size_t i = 0; i < g_game.players.size(); ++i) {
+            if (g_game.players[i].connected && g_game.players[i].name == name) {
+                serverSendTo((int)i, "ERROR|Kicked");
+                closesocket(g_game.players[i].socket);
+                g_game.players[i].connected = false;
+                g_game.players[i].socket = INVALID_SOCKET;
+                serverBroadcast("MSG|" + name + " kicked");
+                printf("Kicked: %s\n", name.c_str());
+                return;
+            }
+        }
+        printf("Not found: %s\n", name.c_str());
+
+    } else if (arg == "list") {
+        printf("--- Players ---\n");
+        for (size_t i = 0; i < g_game.players.size(); ++i)
+            if (g_game.players[i].connected)
+                printf(" [%d] %s (ready=%d)\n", (int)i,
+                       g_game.players[i].name.c_str(),
+                       g_game.players[i].isReady ? 1 : 0);
+
+    } else if (arg == "quit") {
+        g_serverRunning = false;
+    }
+}
+
+int main() {
+    printf("=== UNO Server ===\n");
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+        { printf("WSAStartup failed\n"); return 1; }
+
+    SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSock == INVALID_SOCKET)
+        { printf("socket() failed\n"); WSACleanup(); return 1; }
+
+    int opt = 1; setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
+    sockaddr_in addr; addr.sin_family = AF_INET; addr.sin_addr.s_addr = INADDR_ANY; addr.sin_port = htons(SERVER_PORT);
+    if (bind(listenSock, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
+        { printf("bind() failed\n"); closesocket(listenSock); WSACleanup(); return 1; }
+    if (listen(listenSock, MAX_PLAYERS) == SOCKET_ERROR)
+        { printf("listen() failed\n"); closesocket(listenSock); WSACleanup(); return 1; }
+    printf("Server listening on port %d\n", SERVER_PORT);
+
+    g_game.players.resize(MAX_PLAYERS);
+    g_game.currentColor = RuleColor::None; g_game.currentPlayer = 0;
+    g_game.direction = 1; g_game.gameStarted = false; g_game.turnCount = 0;
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
+        g_game.players[i].socket = INVALID_SOCKET;
+        g_game.players[i].connected = false;
+        g_game.players[i].isReady = false;
+        g_game.players[i].id = i;
+    }
+
+    std::thread adminThread(adminInputThread);
+    adminThread.detach();
+
+    fd_set readSet;
+    while (g_serverRunning) {
+        {
+            std::lock_guard<std::mutex> lock(g_adminMutex);
+            while (!g_adminQueue.empty())
+                { processAdminCommand(g_adminQueue.front()); g_adminQueue.pop(); }
+        }
+
+        FD_ZERO(&readSet); FD_SET(listenSock, &readSet);
+        SOCKET maxSock = listenSock;
+        for (int i = 0; i < MAX_PLAYERS; ++i)
+            if (g_game.players[i].connected && g_game.players[i].socket != INVALID_SOCKET) {
+                FD_SET(g_game.players[i].socket, &readSet);
+                if (g_game.players[i].socket > maxSock) maxSock = g_game.players[i].socket;
+            }
+
+        timeval tv = {0, 200000};
+        int result = select((int)maxSock + 1, &readSet, nullptr, nullptr, &tv);
+        if (result == SOCKET_ERROR) { printf("select error\n"); break; }
+        if (result == 0) continue;
+
+        if (FD_ISSET(listenSock, &readSet)) {
+            sockaddr_in clientAddr; int addrLen = sizeof(clientAddr);
+            SOCKET clientSock = accept(listenSock, (sockaddr*)&clientAddr, &addrLen);
+            if (clientSock != INVALID_SOCKET) {
+                int slot = -1;
+                for (int i = 0; i < MAX_PLAYERS; ++i)
+                    if (!g_game.players[i].connected) { slot = i; break; }
+                if (slot == -1) {
+                    send(clientSock, "ERROR|Server full\n", 18, 0);
+                    closesocket(clientSock);
+                } else {
+                    g_game.players[slot].socket = clientSock;
+                    g_game.players[slot].connected = true;
+                    g_game.players[slot].name = ""; g_game.players[slot].hand.clear();
+                    g_game.players[slot].id = slot;
+                    printf("[+] Player %d (%s)\n", slot, inet_ntoa(clientAddr.sin_addr));
+                    serverSendTo(slot, "WELCOME|" + std::to_string(slot));
+                }
+            }
+        }
+
+        for (int i = 0; i < MAX_PLAYERS; ++i) {
+            if (!g_game.players[i].connected || g_game.players[i].socket == INVALID_SOCKET) continue;
+            if (!FD_ISSET(g_game.players[i].socket, &readSet)) continue;
+            std::string line;
+            if (!recvLine(g_game.players[i].socket, line)) {
+                if (g_game.gameStarted) serverBroadcast("MSG|" + g_game.players[i].name + " disconnected");
+                g_game.players[i].connected = false;
+                closesocket(g_game.players[i].socket);
+                g_game.players[i].socket = INVALID_SOCKET;
+                printf("[-] Player %d disconnected\n", i);
+                continue;
+            }
+            if (!line.empty()) { printf("  [%d] %s\n", i, line.c_str()); processMessage(i, line); }
+        }
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; ++i)
+        if (g_game.players[i].socket != INVALID_SOCKET) closesocket(g_game.players[i].socket);
+    closesocket(listenSock); WSACleanup();
+    return 0;
+}
