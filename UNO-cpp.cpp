@@ -437,7 +437,7 @@ void startGame() {
                 while (peekmessage(&em, EM_MOUSE)) {
                     if (em.message != WM_LBUTTONUP) continue;
                     int hit = hitTestCard(em.x, em.y, (int)game.players[0].hand.size());
-                    if (hit >= 0) { Card& card = game.players[0].hand[hit]; if (canPlay(card, topDiscard(game), game.currentColor)) { Color ch = Color::None; if (isWildCard(card)) ch = showColorPicker(); if (playCard(game, 0, hit, ch)) { msg = "出了 " + cardToString(card); if (isWildCard(card)) msg += " 选" + colorToString(ch); acted = true; } } else { msg = "不能出!"; } break; }
+                    if (hit >= 0) { Card card = game.players[0].hand[hit]; if (canPlay(card, topDiscard(game), game.currentColor)) { Color ch = Color::None; if (isWildCard(card)) ch = showColorPicker(); if (playCard(game, 0, hit, ch)) { msg = "出了 " + cardToString(card); if (isWildCard(card)) msg += " 选" + colorToString(ch); acted = true; } } else { msg = "不能出!"; } break; }
                     if (isInRect(em.x, em.y, DRAW_X, DRAW_Y, CARD_W, CARD_H)) { drawCards(game, 0, 1); msg = "抽了一张"; if (!game.players[0].hand.empty()) { Card& dn = game.players[0].hand.back(); if (canPlay(dn, topDiscard(game), game.currentColor)) msg += "(可出)"; else { moveToNextPlayer(game, 1); acted = true; } } break; }
                 }
                 cleardevice(); putimage(0, 0, &bg);
@@ -581,10 +581,28 @@ void multipleGame() {
                 localGame.players[hidx].hand.clear(); std::istringstream ss(rest); string cs;
                 string rm2[] = {"0","1","2","3","4","5","6","7","8","9","Skip","Reverse","DrawTwo","Wild","WildDrawFour"};
                 Rank rv2[] = {Rank::Num0,Rank::Num1,Rank::Num2,Rank::Num3,Rank::Num4,Rank::Num5,Rank::Num6,Rank::Num7,Rank::Num8,Rank::Num9,Rank::Skip,Rank::Reverse,Rank::DrawTwo,Rank::Wild,Rank::WildDrawFour};
-                while (getline(ss, cs, '|')) { size_t u = cs.find('_'); if (u == string::npos) continue; string cl = cs.substr(0,u), rk = cs.substr(u+1); Card c; if (cl=="Red") c.color=Color::Red; else if (cl=="Yellow") c.color=Color::Yellow; else if (cl=="Green") c.color=Color::Green; else if (cl=="Blue") c.color=Color::Blue; else c.color=Color::Wild; for (int ri=0;ri<15;ri++) if (rk==rm2[ri]) c.rank=rv2[ri]; localGame.players[hidx].hand.push_back(c); }
+                while (getline(ss, cs, '|')) {
+                    Card c; size_t u = cs.find('_');
+                    if (u == string::npos) {
+                        // 万能牌无下划线：Wild / WildDrawFour
+                        if (cs == "Wild") { c.color = Color::Wild; c.rank = Rank::Wild; }
+                        else if (cs == "WildDrawFour") { c.color = Color::Wild; c.rank = Rank::WildDrawFour; }
+                        else continue;
+                    } else {
+                        string cl = cs.substr(0,u), rk = cs.substr(u+1);
+                        if (cl=="Red") c.color=Color::Red; else if (cl=="Yellow") c.color=Color::Yellow;
+                        else if (cl=="Green") c.color=Color::Green; else if (cl=="Blue") c.color=Color::Blue;
+                        else c.color=Color::Wild;
+                        for (int ri=0;ri<15;ri++) if (rk==rm2[ri]) { c.rank=rv2[ri]; break; }
+                    }
+                    localGame.players[hidx].hand.push_back(c);
+                }
             }
             else if (cmd == "YOUR_TURN") {
-                myTurn = true; acted = false; statusMsg = "轮到你了!";
+                myTurn = true; acted = false;
+                // 保留刚才 ACTION 里显示的出牌信息
+                if (statusMsg.empty() || statusMsg.find("出了") == string::npos)
+                    statusMsg = "轮到你了!";
                 { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} } // 清空回合外积累的鼠标事件
                 Card top = localGame.discardPile.empty() ? Card{Color::None,Rank::Num0} : localGame.discardPile.back();
                 int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
