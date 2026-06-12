@@ -83,39 +83,94 @@ private:
     COLORREF normalColor, hoverColor, pressColor, textColor;
     bool hovering, pressing, enabled;
     int fontSize;
+    int _index;              // 位置索引：奇数位(0,2,4...)=bu1, 偶数位(1,3,5...)=bu2
+    static IMAGE _bu1;       // 奇数位背景图
+    static IMAGE _bu2;       // 偶数位背景图
+    static IMAGE _mask;      // 按下叠加的深色蒙版
+    static bool _imgsReady;
+    static int _maskW, _maskH;
+
+    static void _ensureImages() {
+        if (_imgsReady) return;
+        _imgsReady = true;
+
+        const int BW = 200, BH = 60;
+
+        // bu1 - 尝试加载，失败则生成占位图
+        IMAGE t1(BW, BH);
+        loadimage(&t1, _T("Assets/Button/bu1_1.jpg"), BW, BH);
+        if (t1.getwidth() > 0 && t1.getheight() > 0) {
+            _bu1 = t1;
+        } else {
+            _bu1.Resize(BW, BH);
+            SetWorkingImage(&_bu1);
+            setfillcolor(RGB(245, 158, 11));
+            solidroundrect(0, 0, BW, BH, 8, 8);
+            SetWorkingImage(NULL);
+        }
+
+        // bu2 - 尝试加载，失败则生成占位图
+        IMAGE t2(BW, BH);
+        loadimage(&t2, _T("Assets/Button/bu2_1.jpg"), BW, BH);
+        if (t2.getwidth() > 0 && t2.getheight() > 0) {
+            _bu2 = t2;
+        } else {
+            _bu2.Resize(BW, BH);
+            SetWorkingImage(&_bu2);
+            setfillcolor(RGB(234, 179, 8));
+            solidroundrect(0, 0, BW, BH, 8, 8);
+            SetWorkingImage(NULL);
+        }
+    }
+
+    void _ensureMask(int bw, int bh) {
+        if (_maskW == bw && _maskH == bh) return;
+        _mask.Resize(bw, bh);
+        SetWorkingImage(&_mask);
+        cleardevice();
+        setfillcolor(RGB(0, 0, 0));
+        solidroundrect(0, 0, bw, bh, 8, 8);
+        SetWorkingImage(NULL);
+        _maskW = bw; _maskH = bh;
+    }
+
 public:
-    Button(int _x, int _y, int _w, int _h, LPCTSTR _text,
+    Button(int _x, int _y, int _w, int _h, LPCTSTR _text, int idx = 0,
         COLORREF _normal = RGB(245, 158, 11),
         COLORREF _hover = RGB(234, 179, 8),
         COLORREF _press = RGB(249, 115, 22))
-        : x(_x), y(_y), w(_w), h(_h), text(_text),
+        : x(_x), y(_y), w(_w), h(_h), text(_text), _index(idx),
         normalColor(_normal), hoverColor(_hover), pressColor(_press),
-        textColor(WHITE), hovering(false), pressing(false), enabled(true), fontSize(25) {}
+        textColor(WHITE), hovering(false), pressing(false), enabled(true), fontSize(25)
+    {
+        _ensureImages();
+    }
 
     void draw() {
-        COLORREF drawColor, drawTextColor;
+        COLORREF drawTextColor;
         if (!enabled) {
-            drawColor = RGB(150, 150, 150);
             drawTextColor = RGB(100, 100, 100);
-        } else if (pressing) {
-            drawColor = pressColor;
-            drawTextColor = textColor;
-        } else if (hovering) {
-            drawColor = hoverColor;
-            drawTextColor = textColor;
         } else {
-            drawColor = normalColor;
             drawTextColor = textColor;
         }
-        setfillcolor(drawColor);
-        fillroundrect(x, y, x + w, y + h, 8, 8);
-        setlinecolor(RGB(245, 158, 11));
-        setlinestyle(PS_SOLID, 2);
-        roundrect(x, y, x + w, y + h, 8, 8);
+
+        // 根据奇偶位选择背景图
+        IMAGE* bg = (_index % 2 == 0) ? &_bu1 : &_bu2;
+        Tool::putimage_alpha(x, y, w, h, bg);
+
+        // 按下时叠加深色半透明蒙版
+        if (pressing && enabled) {
+            _ensureMask(w, h);
+            AlphaBlend(GetImageHDC(NULL), x, y, w, h,
+                       GetImageHDC(&_mask), 0, 0, w, h,
+                       { AC_SRC_OVER, 0, 100, AC_SRC_ALPHA });
+            drawTextColor = RGB(180, 180, 180);
+        }
+
+        // 居中文字
         setbkmode(TRANSPARENT);
         settextcolor(drawTextColor);
         setSmoothFont(fontSize, _T("SimSun"));
-
         int tx = x + (w - textwidth(text)) / 2;
         int ty = y + (h - textheight(text)) / 2;
         outtextxy(tx, ty, text);
@@ -143,6 +198,14 @@ public:
     void setFontSize(int s) { fontSize = s; }
 };
 
+// Button 静态成员定义（必须放在 .cpp 中）
+IMAGE Button::_bu1;
+IMAGE Button::_bu2;
+IMAGE Button::_mask;
+bool Button::_imgsReady = false;
+int Button::_maskW = 0;
+int Button::_maskH = 0;
+
 /*
  * setSmoothFont —— 设置带 ClearType 抗锯齿的字体
  * 使用 EasyX 的 LOGFONT 结构体 + settextstyle 实现。
@@ -169,22 +232,25 @@ void openMenu();
  */
 void openSetting() {
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
-    Button vol0(150,100,200,30,_T("静音"));
-    Button vol20(150,150,200,30,_T("20%"));
-    Button vol40(150,200,200,30,_T("40%"));
-    Button vol60(150,250,200,30,_T("60%"));
-    Button vol80(150,300,200,30,_T("80%"));
-    Button vol100(150,350,200,30,_T("100%"));
-    Button exitSetting(300,450,200,30,_T("返回"));
-    Button bgp1(450,175,200,30,_T("背景1"));
-    Button bgp2(450,225,200,30,_T("背景2"));
-    Button bgp3(450,275,200,30,_T("背景3"));
+    Button vol0(150,100,200,30,_T("静音"), 0);
+    Button vol20(150,150,200,30,_T("20%"), 1);
+    Button vol40(150,200,200,30,_T("40%"), 2);
+    Button vol60(150,250,200,30,_T("60%"), 3);
+    Button vol80(150,300,200,30,_T("80%"), 4);
+    Button vol100(150,350,200,30,_T("100%"), 5);
+    Button exitSetting(300,450,200,30,_T("返回"), 0);
+    Button bgp1(450,175,200,30,_T("背景1"), 0);
+    Button bgp2(450,225,200,30,_T("背景2"), 1);
+    Button bgp3(450,275,200,30,_T("背景3"), 2);
+    Button bgp4(450, 325, 200, 30, _T("背景4"), 3);
+
     ExMessage msg; bool running = true;
     while (running) {
         while (peekmessage(&msg, EM_MOUSE)) {
             vol0.handleMessage(msg); vol20.handleMessage(msg); vol40.handleMessage(msg);
             vol60.handleMessage(msg); vol80.handleMessage(msg); vol100.handleMessage(msg);
             bgp1.handleMessage(msg); bgp2.handleMessage(msg); bgp3.handleMessage(msg);
+            bgp4.handleMessage(msg);
             exitSetting.handleMessage(msg);
             if (vol0.isClicked(msg)) { music::adjustCurrentVolume(0); outtextxy(350,500,_T("已静音")); FlushBatchDraw();Sleep(500); }
             if (vol20.isClicked(msg)) { music::adjustCurrentVolume(200); outtextxy(350,500,_T("20%")); FlushBatchDraw();Sleep(500); }
@@ -195,13 +261,14 @@ void openSetting() {
             if (bgp1.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景1")); FlushBatchDraw();Sleep(500); }
             if (bgp2.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg2.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景2")); FlushBatchDraw();Sleep(500); }
             if (bgp3.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg3.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景3")); FlushBatchDraw();Sleep(500); }
+            if (bgp4.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg4.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景4")); FlushBatchDraw(); Sleep(500); }
             if (exitSetting.isClicked(msg)) running = false;
         }
         cleardevice(); putimage(0,0,&bg);
         settextcolor(RGB(255,255,255)); setSmoothFont(35,_T("SimHei")); outtextxy(155,50,_T("音量"));
         setSmoothFont(35,_T("SimHei")); outtextxy(460,50,_T("背景"));
         vol0.draw(); vol20.draw(); vol40.draw(); vol60.draw(); vol80.draw(); vol100.draw();
-        bgp1.draw(); bgp2.draw(); bgp3.draw(); exitSetting.draw();
+        bgp1.draw(); bgp2.draw(); bgp3.draw(); bgp4.draw(); exitSetting.draw();
         FlushBatchDraw(); Sleep(16);
     }
 }
@@ -382,7 +449,7 @@ void startGame() {
     settextcolor(RGB(255,215,0)); setSmoothFont(40, _T("SimHei"));
     string ems = game.players[wi].name + " 获胜!";
     outtextxy(400 - textwidth(s2w(ems).c_str()) / 2, 230, s2w(ems).c_str());
-    Button btnBack(300,340,200,50,_T("返回"));
+    Button btnBack(300,340,200,50,_T("返回"), 0);
     btnBack.draw(); FlushBatchDraw();
     ExMessage flush; while (peekmessage(&flush, EM_MOUSE));
     bool back = false;
@@ -585,10 +652,10 @@ void openMenu() {
     initgraph(800, 600,NOCLOSE);
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     BeginBatchDraw();
-    Button sp(300,140,200,60,_T("单人游戏"));
-    Button mp(300,220,200,60,_T("多人游戏"));
-    Button st(300,300,200,60,_T("设置"));
-    Button ex(300,380,200,60,_T("退出游戏"));
+    Button sp(300,140,200,60,_T("单人游戏"), 0);
+    Button mp(300,220,200,60,_T("多人游戏"), 1);
+    Button st(300,300,200,60,_T("设置"), 2);
+    Button ex(300,380,200,60,_T("退出游戏"), 3);
     ExMessage msg; bool running = true;
     while (running) {
         while (peekmessage(&msg, EM_MOUSE)) {

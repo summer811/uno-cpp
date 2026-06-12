@@ -35,3 +35,4 @@ public:
 Picture bgp1("/Assets/Picture/bg.jpg", 0, 0, 200, 30);
 Picture bgp2("/Assets/Picture/bg2.jpg", 0, 0, 200, 30);
 Picture bgp3("/Assets/Picture/bg3.jpg", 0, 0, 200, 30);
+Picture bgp4("/Assets/Picture/bg4.jpg", 0, 0, 200, 30);
