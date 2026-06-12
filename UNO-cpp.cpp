@@ -58,6 +58,9 @@ const int DRAW_X = 430;
 const int DRAW_Y = 150;
 const int STATUS_Y = 390;
 
+/*背景标记变量*/
+int bgp_num = 0;
+
 LPCTSTR g_backgroundPath = _T("Assets/Picture/bg.jpg");
 IMAGE cardImages[5][15];
 IMAGE cardBack;
@@ -87,18 +90,21 @@ private:
     static IMAGE _bu1;       // 奇数位背景图
     static IMAGE _bu2;       // 偶数位背景图
     static IMAGE _mask;      // 按下叠加的深色蒙版
-    static bool _imgsReady;
     static int _maskW, _maskH;
 
-    static void _ensureImages() {
-        if (_imgsReady) return;
-        _imgsReady = true;
-
+    // 根据当前 bgp_num 加载对应的按钮背景图
+    // 命名规则: Assets/Button/bu1_{n}.jpg, bu2_{n}.jpg  (n = bgp_num + 1)
+    // 例: bgp_num=0 → bu1_1.jpg / bu2_1.jpg,  bgp_num=1 → bu1_2.jpg / bu2_2.jpg
+    static void _loadImagesForBg() {
         const int BW = 200, BH = 60;
 
-        // bu1 - 尝试加载，失败则生成占位图
+        TCHAR bu1Path[256], bu2Path[256];
+        _stprintf_s(bu1Path, _T("Assets/Button/bu1_%d.jpg"), bgp_num + 1);
+        _stprintf_s(bu2Path, _T("Assets/Button/bu2_%d.jpg"), bgp_num + 1);
+
+        // bu1
         IMAGE t1(BW, BH);
-        loadimage(&t1, _T("Assets/Button/bu1_1.jpg"), BW, BH);
+        loadimage(&t1, bu1Path, BW, BH);
         if (t1.getwidth() > 0 && t1.getheight() > 0) {
             _bu1 = t1;
         } else {
@@ -109,9 +115,9 @@ private:
             SetWorkingImage(NULL);
         }
 
-        // bu2 - 尝试加载，失败则生成占位图
+        // bu2
         IMAGE t2(BW, BH);
-        loadimage(&t2, _T("Assets/Button/bu2_1.jpg"), BW, BH);
+        loadimage(&t2, bu2Path, BW, BH);
         if (t2.getwidth() > 0 && t2.getheight() > 0) {
             _bu2 = t2;
         } else {
@@ -143,7 +149,7 @@ public:
         normalColor(_normal), hoverColor(_hover), pressColor(_press),
         textColor(WHITE), hovering(false), pressing(false), enabled(true), fontSize(25)
     {
-        _ensureImages();
+        _loadImagesForBg();
     }
 
     void draw() {
@@ -196,13 +202,15 @@ public:
     LPCTSTR getText() { return text; }
     void setPosition(int _x, int _y) { x = _x; y = _y; }
     void setFontSize(int s) { fontSize = s; }
+
+    // 背景切换后调用，根据当前 bgp_num 重新加载按钮图片
+    static void reloadImages() { _loadImagesForBg(); }
 };
 
 // Button 静态成员定义（必须放在 .cpp 中）
 IMAGE Button::_bu1;
 IMAGE Button::_bu2;
 IMAGE Button::_mask;
-bool Button::_imgsReady = false;
 int Button::_maskW = 0;
 int Button::_maskH = 0;
 
@@ -232,17 +240,17 @@ void openMenu();
  */
 void openSetting() {
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
-    Button vol0(150,100,200,30,_T("静音"), 0);
-    Button vol20(150,150,200,30,_T("20%"), 1);
-    Button vol40(150,200,200,30,_T("40%"), 2);
-    Button vol60(150,250,200,30,_T("60%"), 3);
-    Button vol80(150,300,200,30,_T("80%"), 4);
-    Button vol100(150,350,200,30,_T("100%"), 5);
-    Button exitSetting(300,450,200,30,_T("返回"), 0);
-    Button bgp1(450,175,200,30,_T("背景1"), 0);
-    Button bgp2(450,225,200,30,_T("背景2"), 1);
-    Button bgp3(450,275,200,30,_T("背景3"), 2);
-    Button bgp4(450, 325, 200, 30, _T("背景4"), 3);
+    Button vol0(150,100,200,60,_T("静音"), 0);
+    Button vol20(150,170,200,60,_T("20%"), 1);
+    Button vol40(150,240,200,60,_T("40%"), 2);
+    Button vol60(150,310,200,60,_T("60%"), 3);
+    Button vol80(150,380,200,60,_T("80%"), 4);
+    Button vol100(150,450,200,60,_T("100%"), 5);
+    Button exitSetting(450,450,200,50,_T("返回"), 0);
+    Button bgp1(450,100,200,60,_T("背景1"), 0);
+    Button bgp2(450,170,200,60,_T("背景2"), 1);
+    Button bgp3(450,240,200,60,_T("背景3"), 2);
+    Button bgp4(450, 310, 200, 60, _T("背景4"), 3);
 
     ExMessage msg; bool running = true;
     while (running) {
@@ -258,10 +266,10 @@ void openSetting() {
             if (vol60.isClicked(msg)) { music::adjustCurrentVolume(600); outtextxy(350,500,_T("60%")); FlushBatchDraw();Sleep(500); }
             if (vol80.isClicked(msg)) { music::adjustCurrentVolume(800); outtextxy(350,500,_T("80%")); FlushBatchDraw();Sleep(500); }
             if (vol100.isClicked(msg)) { music::adjustCurrentVolume(1000); outtextxy(350,500,_T("100%")); FlushBatchDraw();Sleep(500); }
-            if (bgp1.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景1")); FlushBatchDraw();Sleep(500); }
-            if (bgp2.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg2.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景2")); FlushBatchDraw();Sleep(500); }
-            if (bgp3.isClicked(msg)) { g_backgroundPath=_T("Assets/Picture/bg3.jpg"); loadimage(&bg,g_backgroundPath,800,600); outtextxy(350,500,_T("背景3")); FlushBatchDraw();Sleep(500); }
-            if (bgp4.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg4.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景4")); FlushBatchDraw(); Sleep(500); }
+            if (bgp1.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景1")); FlushBatchDraw(); Sleep(500); bgp_num = 0; Button::reloadImages(); }
+            if (bgp2.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg2.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景2")); FlushBatchDraw(); Sleep(500); bgp_num = 1; Button::reloadImages(); }
+            if (bgp3.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg3.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景3")); FlushBatchDraw(); Sleep(500); bgp_num = 2; Button::reloadImages(); }
+            if (bgp4.isClicked(msg)) { g_backgroundPath = _T("Assets/Picture/bg4.jpg"); loadimage(&bg, g_backgroundPath, 800, 600); outtextxy(350, 500, _T("背景4")); FlushBatchDraw(); Sleep(500); bgp_num = 3; Button::reloadImages(); }
             if (exitSetting.isClicked(msg)) running = false;
         }
         cleardevice(); putimage(0,0,&bg);
@@ -662,7 +670,7 @@ void openMenu() {
             sp.handleMessage(msg); mp.handleMessage(msg); st.handleMessage(msg); ex.handleMessage(msg);
             if (sp.isClicked(msg)) { startGame(); loadimage(&bg,g_backgroundPath,800,600); FlushBatchDraw(); Sleep(500); }
             if (mp.isClicked(msg)) { multipleGame(); loadimage(&bg,g_backgroundPath,800,600); FlushBatchDraw(); Sleep(500); }
-            if (st.isClicked(msg)) { openSetting(); loadimage(&bg,g_backgroundPath,800,600); FlushBatchDraw(); Sleep(500); }
+            if (st.isClicked(msg)) { openSetting(); Button::reloadImages(); loadimage(&bg,g_backgroundPath,800,600); FlushBatchDraw(); Sleep(500); }
             if (ex.isClicked(msg)) running = false;
         }
         cleardevice(); putimage(0,0,&bg); sp.draw(); mp.draw(); st.draw(); ex.draw();

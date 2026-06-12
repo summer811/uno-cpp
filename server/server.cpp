@@ -11,7 +11,7 @@
  * 5. 管理命令从后台线程读取，互斥锁同步
  *
  * 玩家槽位：固定 4 个 (slot 0-3)，每个 slot 可以单独连接/断开。
- * nextConnectedPlayer() 确保轮次只经过在线的 slot。
+ * 循环双向链表（nextSlot/prevSlot）确保轮次只经过在线的玩家。
  */
 
 #include "server.h"
@@ -29,6 +29,7 @@
 
 ServerGameState g_game;
 std::string g_messageBuffer;
+// 其他 .cpp 通过 "extern ServerGameState g_game;" 引用
 static std::queue<std::string> g_adminQueue;
 static std::mutex g_adminMutex;
 static bool g_serverRunning = true;
@@ -69,7 +70,7 @@ bool recvLine(SOCKET s, std::string& line) {
  * 支持命令：op start / op kick / op list / op quit
  */
 void adminInputThread() {
-    printf("Commands: op start | op kick name | op list | op quit\n");
+    printf("Commands: op start | op kick name | op list | op quit | op shutdown\n");
     std::string line;
     while (g_serverRunning) {
         line.clear(); int c;
@@ -83,10 +84,11 @@ void adminInputThread() {
 
 /*
  * processAdminCommand —— 执行管理命令
- * op start：检查在线人数 ≥ MIN_PLAYERS，发牌、初始化、广播 GAME_START
+ * op start [2-3人]：检查在线人数 ≥ MIN_PLAYERS，发牌、初始化、广播 GAME_START
  * op kick name：查找玩家，发 ERROR|Kicked 并断开 socket
  * op list：打印在线玩家列表
- * op quit：设 g_serverRunning=false，关闭主循环
+ * op quit：重置房间（踢所有人、清状态、等待下一局）
+ * op shutdown：关闭服务端
  */
 void processAdminCommand(const std::string& cmd) {
     std::istringstream ss(cmd);
@@ -95,38 +97,12 @@ void processAdminCommand(const std::string& cmd) {
 
     if (arg == "start") {
         if (g_game.gameStarted) { printf("Already started\n"); return; }
-        int readyCount = 0;
-        for (auto& p : g_game.players)
-            if (p.connected && !p.name.empty()) readyCount++;
-        if (readyCount < MIN_PLAYERS) {
-            printf("Need %d+ players (have %d)\n", MIN_PLAYERS, readyCount);
+        if (g_game.connectedCount < MIN_PLAYERS) {
+            printf("Need %d+ players (have %d)\n", MIN_PLAYERS, g_game.connectedCount);
             return;
         }
-        g_game.gameStarted = true;
-        printf("Game started, %d players\n", readyCount);
-
-        g_game.drawPile = ruleCreateUnoDeck();
-        ruleShuffleDeck(g_game.drawPile);
-        for (size_t i = 0; i < g_game.players.size(); ++i) {
-            if (!g_game.players[i].connected) continue;
-            g_game.players[i].hand.clear();
-            for (int j = 0; j < 7; ++j) {
-                if (g_game.drawPile.empty()) {
-                    RuleCard top = g_game.discardPile.back();
-                    g_game.discardPile.pop_back();
-                    g_game.drawPile.insert(g_game.drawPile.end(),
-                        g_game.discardPile.begin(), g_game.discardPile.end());
-                    g_game.discardPile.clear(); g_game.discardPile.push_back(top);
-                    ruleShuffleDeck(g_game.drawPile);
-                }
-                g_game.players[i].hand.push_back(g_game.drawPile.back());
-                g_game.drawPile.pop_back();
-            }
-        }
-        initDiscardPile();
-        g_game.currentPlayer = 0; g_game.direction = 1; g_game.turnCount = 0;
-        serverBroadcast("GAME_START");
-        broadcastGameState(); broadcastHands(); notifyCurrentTurn();
+        serverBroadcast("MSG|Admin starts the game!");
+        startGame();
 
     } else if (arg == "kick") {
         std::string name; std::getline(ss, name);
@@ -138,6 +114,7 @@ void processAdminCommand(const std::string& cmd) {
                 closesocket(g_game.players[i].socket);
                 g_game.players[i].connected = false;
                 g_game.players[i].socket = INVALID_SOCKET;
+                rebuildPlayerList();
                 serverBroadcast("MSG|" + name + " kicked");
                 printf("Kicked: %s\n", name.c_str());
                 return;
@@ -154,6 +131,10 @@ void processAdminCommand(const std::string& cmd) {
                        g_game.players[i].isReady ? 1 : 0);
 
     } else if (arg == "quit") {
+        printf("[!] Resetting room...\n");
+        resetToLobby();
+    } else if (arg == "shutdown") {
+        printf("[!] Server shutting down...\n");
         g_serverRunning = false;
     }
 }
@@ -185,6 +166,7 @@ int main() {
         g_game.players[i].isReady = false;
         g_game.players[i].id = i;
     }
+    rebuildPlayerList();
 
     std::thread adminThread(adminInputThread);
     adminThread.detach();
@@ -225,8 +207,12 @@ int main() {
                     g_game.players[slot].connected = true;
                     g_game.players[slot].name = ""; g_game.players[slot].hand.clear();
                     g_game.players[slot].id = slot;
+                    rebuildPlayerList();
                     printf("[+] Player %d (%s)\n", slot, inet_ntoa(clientAddr.sin_addr));
                     serverSendTo(slot, "WELCOME|" + std::to_string(slot));
+                    // 4 人满且都发了名字 → 自动开始（详见 JOIN 处理）
+                    if (!g_game.gameStarted && g_game.connectedCount == MAX_PLAYERS)
+                        printf("[!] All slots filled, waiting for names...\n");
                 }
             }
         }
@@ -240,6 +226,7 @@ int main() {
                 g_game.players[i].connected = false;
                 closesocket(g_game.players[i].socket);
                 g_game.players[i].socket = INVALID_SOCKET;
+                rebuildPlayerList();
                 printf("[-] Player %d disconnected\n", i);
                 continue;
             }

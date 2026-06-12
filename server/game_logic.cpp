@@ -5,7 +5,7 @@
  * 核心规则引擎使用 rule.h/rule.cpp 的共享实现。
  *
  * 关键特性：
- * - nextConnectedPlayer()：跳过断开连接的玩家槽位
+ * - nextPlayer()：沿循环双向链表 O(1) 找到下一个在线玩家
  * - notifyCurrentTurn()：跳过空槽，找到下一个在线玩家
  * - processMessage()：解析客户端 JOIN/PLAY/DRAW 等命令
  * - handlePlay()/handleDraw()：执行出牌/抽牌并广播结果
@@ -16,6 +16,10 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
+
+// 全局服务端状态（定义于 server.cpp）
+extern ServerGameState g_game;
+extern std::string g_messageBuffer;
 
 // ===== 辅助函数：字符串 ↔ RuleColor 转换（供协议解析使用）=====
 static RuleColor stringToRuleColor(const std::string& s) {
@@ -116,36 +120,68 @@ void broadcastGameState() {
 }
 
 void notifyCurrentTurn() {
-    // 跳过空槽（!connected 的 slot）
-    while (g_game.currentPlayer >= 0 && g_game.currentPlayer < (int)g_game.players.size()
-           && !g_game.players[g_game.currentPlayer].connected) {
-        g_game.currentPlayer = nextConnectedPlayer(g_game.currentPlayer, g_game.direction);
-    }
+    if (g_game.connectedCount == 0) return;
+
+    // 如果当前玩家断线了，沿链表进到下一个在线的（链表保证一次到达）
+    if (!g_game.players[g_game.currentPlayer].connected)
+        g_game.currentPlayer = nextPlayer(g_game.currentPlayer, g_game.direction);
+
     std::string turnMsg = "YOUR_TURN|30000";
-    if (g_game.currentPlayer >= 0 && g_game.currentPlayer < (int)g_game.players.size()) {
-        if (g_game.players[g_game.currentPlayer].connected)
-            serverSendTo(g_game.currentPlayer, turnMsg);
-        serverBroadcast("ACTION|" +
-            std::to_string(g_game.currentPlayer) + "|TURN|" +
-            g_game.players[g_game.currentPlayer].name);
-    }
+    serverSendTo(g_game.currentPlayer, turnMsg);
+    serverBroadcast("ACTION|" +
+        std::to_string(g_game.currentPlayer) + "|TURN|" +
+        g_game.players[g_game.currentPlayer].name);
 }
 
 /* ========== 工具函数 ========== */
 
-int nextConnectedPlayer(int from, int dir) {
-    int n = (int)g_game.players.size();
-    for (int s = 1; s <= n; ++s) {
-        int idx = (from + dir * s + n) % n;
-        if (g_game.players[idx].connected) return idx;
+/*
+ * rebuildPlayerList — 根据 players[].connected 重建循环双向链表
+ * 每次玩家连接/断线后调用，保证 nextPlayer() 能 O(1) 找到下一个在线玩家。
+ */
+void rebuildPlayerList() {
+    // 重置（自环保证断线时 nextPlayer 有安全返回值）
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
+        g_game.players[i].nextSlot = i;
+        g_game.players[i].prevSlot = i;
     }
-    return from;
+
+    int slots[MAX_PLAYERS];
+    g_game.connectedCount = 0;
+    for (int i = 0; i < MAX_PLAYERS; ++i)
+        if (g_game.players[i].connected)
+            slots[g_game.connectedCount++] = i;
+
+    if (g_game.connectedCount <= 1) return;  // 0 或 1 人时自环即可
+
+    // 串成循环双向链表（按 slot 顺序排列）
+    for (int i = 0; i < g_game.connectedCount; ++i) {
+        int cur = slots[i];
+        int nxt = slots[(i + 1) % g_game.connectedCount];
+        int prv = slots[(i - 1 + g_game.connectedCount) % g_game.connectedCount];
+        g_game.players[cur].nextSlot = nxt;
+        g_game.players[cur].prevSlot = prv;
+    }
+}
+
+/* 
+ * nextPlayer — 沿链表走一步
+ * dir > 0 正向 (next), dir < 0 反向 (prev)
+ * O(1) 查找，不再扫描数组
+ */
+int nextPlayer(int from, int dir) {
+    if (from < 0 || from >= MAX_PLAYERS) {
+        for (int i = 0; i < MAX_PLAYERS; ++i)
+            if (g_game.players[i].connected) return i;
+        return 0;
+    }
+    return (dir > 0) ? g_game.players[from].nextSlot
+                     : g_game.players[from].prevSlot;
 }
 
 /* ========== 卡牌效果 / 流程 ========== */
 
 void applyCardEffect(const RuleCard& card, RuleColor chosenColor) {
-    int n = (int)g_game.players.size();
     if (ruleIsWildCard(card))
         g_game.currentColor = chosenColor;
     else
@@ -154,24 +190,26 @@ void applyCardEffect(const RuleCard& card, RuleColor chosenColor) {
     int cp = g_game.currentPlayer;
 
     if (card.rank == RuleRank::Skip) {
-        cp = nextConnectedPlayer(cp, g_game.direction);
-        cp = nextConnectedPlayer(cp, g_game.direction);
+        // 跳过下一个人 → 沿链表走两步
+        cp = nextPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);
     } else if (card.rank == RuleRank::Reverse) {
         g_game.direction *= -1;
-        cp = nextConnectedPlayer(cp, g_game.direction);
-        if (n == 2) cp = nextConnectedPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);
+        if (g_game.connectedCount == 2)  // 两人局中 Reverse 等价于 Skip
+            cp = nextPlayer(cp, g_game.direction);
     } else if (card.rank == RuleRank::DrawTwo) {
-        int target = nextConnectedPlayer(cp, g_game.direction);
+        int target = nextPlayer(cp, g_game.direction);  // 被罚者
         drawCardsFor(target, 2);
-        cp = nextConnectedPlayer(cp, g_game.direction);
-        cp = nextConnectedPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);           // 跳过他
+        cp = nextPlayer(cp, g_game.direction);
     } else if (card.rank == RuleRank::WildDrawFour) {
-        int target = nextConnectedPlayer(cp, g_game.direction);
+        int target = nextPlayer(cp, g_game.direction);
         drawCardsFor(target, 4);
-        cp = nextConnectedPlayer(cp, g_game.direction);
-        cp = nextConnectedPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);
     } else {
-        cp = nextConnectedPlayer(cp, g_game.direction);
+        cp = nextPlayer(cp, g_game.direction);
     }
     g_game.currentPlayer = cp;
 }
@@ -209,6 +247,9 @@ bool handlePlay(int playerId, int handIndex, const std::string& colorStr) {
                         g_game.players[playerId].name);
         broadcastGameState();
         broadcastHands();
+        // 延迟一小段时间后重置房间，让客户端收到 WINNER 消息
+        Sleep(200);
+        resetToLobby();
         return true;
     }
     broadcastGameState();
@@ -232,7 +273,7 @@ bool handleDraw(int playerId) {
         if (ruleCanPlay(drawn, top, g_game.currentColor)) {
             serverSendTo(playerId, "MSG|Drew " + ruleCardToString(drawn) + ", click to play");
         } else {
-            g_game.currentPlayer = nextConnectedPlayer(g_game.currentPlayer, g_game.direction);
+            g_game.currentPlayer = nextPlayer(g_game.currentPlayer, g_game.direction);
             g_game.turnCount++;
             serverSendTo(playerId, "MSG|Drawn card not playable, turn passes");
         }
@@ -273,11 +314,18 @@ void processMessage(int playerId, const std::string& msg) {
                 if (g_game.players[i].connected && !g_game.players[i].name.empty())
                     readyCount++;
             printf("[%s] joined (%d/%d)\n", name.c_str(), readyCount, (int)g_game.players.size());
+
+            // 4 人全到且全部命名 → 自动开始
+            if (!g_game.gameStarted && g_game.connectedCount == MAX_PLAYERS && readyCount == MAX_PLAYERS) {
+                serverBroadcast("MSG|All players ready, game starting!");
+                startGame();
+            }
         }
     } else if (cmd == "READY") {
         g_game.players[playerId].isReady = true;
     } else if (cmd == "LEAVE") {
         g_game.players[playerId].connected = false;
+        rebuildPlayerList();
         serverBroadcast("MSG|" + g_game.players[playerId].name + " left the game");
         printf("[%s] left\n", g_game.players[playerId].name.c_str());
     } else if (cmd == "PLAY") {
@@ -291,4 +339,61 @@ void processMessage(int playerId, const std::string& msg) {
     } else if (cmd == "UNO") {
         serverBroadcast("MSG|" + g_game.players[playerId].name + " yelled UNO!");
     }
+}
+
+/* ========== 游戏生命周期 ========== */
+
+void startGame() {
+    g_game.gameStarted = true;
+    int count = g_game.connectedCount;
+    printf("Game started, %d players\n", count);
+
+    g_game.drawPile = ruleCreateUnoDeck();
+    ruleShuffleDeck(g_game.drawPile);
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
+        if (!g_game.players[i].connected) continue;
+        g_game.players[i].hand.clear();
+        for (int j = 0; j < 7; ++j) {
+            if (g_game.drawPile.empty()) reshuffleDrawPile();
+            if (g_game.drawPile.empty()) return;
+            g_game.players[i].hand.push_back(g_game.drawPile.back());
+            g_game.drawPile.pop_back();
+        }
+    }
+    initDiscardPile();
+    g_game.currentPlayer = 0; g_game.direction = 1; g_game.turnCount = 0;
+    serverBroadcast("GAME_START");
+    broadcastGameState(); broadcastHands(); notifyCurrentTurn();
+}
+
+void resetToLobby() {
+    // 通知在线玩家房间即将重置
+    if (g_game.gameStarted)
+        serverBroadcast("MSG|Game over — room resetting...");
+    else
+        serverBroadcast("MSG|Room resetting...");
+
+    // 断开所有玩家
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
+        if (g_game.players[i].socket != INVALID_SOCKET) {
+            closesocket(g_game.players[i].socket);
+            g_game.players[i].socket = INVALID_SOCKET;
+        }
+        g_game.players[i].connected = false;
+        g_game.players[i].name = "";
+        g_game.players[i].hand.clear();
+        g_game.players[i].isReady = false;
+    }
+
+    // 重置游戏状态
+    g_game.drawPile.clear();
+    g_game.discardPile.clear();
+    g_game.currentColor = RuleColor::None;
+    g_game.currentPlayer = 0;
+    g_game.direction = 1;
+    g_game.gameStarted = false;
+    g_game.turnCount = 0;
+
+    rebuildPlayerList();
+    printf("[!] Room reset — waiting for players...\n");
 }

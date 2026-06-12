@@ -46,8 +46,8 @@
 #include "../rule.h"
 
 const int SERVER_PORT = 8888;
-const int MAX_PLAYERS = 4;
-const int MIN_PLAYERS = 2;
+enum { MAX_PLAYERS = 4 };
+enum { MIN_PLAYERS = 2 };
 
 // ===== 玩家连接信息 =====
 struct ClientInfo {
@@ -57,6 +57,8 @@ struct ClientInfo {
     int id;
     bool isReady;
     bool connected;
+    int nextSlot;          // 循环双向链表：下一个在线玩家（仅在 connected=true 时有效）
+    int prevSlot;          // 循环双向链表：上一个在线玩家
 };
 
 // ===== 服务端游戏状态 =====
@@ -70,6 +72,7 @@ struct ServerGameState {
     int       direction = 1;
     bool      gameStarted = false;
     int       turnCount = 0;
+    int       connectedCount = 0;
 };
 
 // ===== 网络通信 =====
@@ -78,10 +81,13 @@ void serverBroadcast(const std::string& message, int excludeId = -1);
 void processMessage(int playerId, const std::string& msg);
 
 // ===== 游戏流程（服务端专用，含跳过断线玩家逻辑）=====
-int  nextConnectedPlayer(int from, int dir);
+void rebuildPlayerList();     // 根据 players[].connected 重建循环链表
+int  nextPlayer(int from, int dir);  // 沿链表走一步（O(1)，不扫描数组）
 void broadcastGameState();
 void broadcastHands();
 void notifyCurrentTurn();
+void startGame();             // 发牌、初始化、广播 GAME_START
+void resetToLobby();          // 踢所有玩家、清空状态、等待下一局
 int  playerIdBySocket(SOCKET s);
 
 // ===== 游戏操作（服务端专用）=====
@@ -92,8 +98,5 @@ void drawCardsFor(int playerId, int count);
 void applyCardEffect(const RuleCard& card, RuleColor chosenColor);
 bool handlePlay(int playerId, int handIndex, const std::string& colorStr);
 bool handleDraw(int playerId);
-
-extern ServerGameState g_game;
-extern std::string g_messageBuffer;
 
 #endif // UNO_SERVER_H
