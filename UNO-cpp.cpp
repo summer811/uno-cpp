@@ -78,6 +78,7 @@ void setSmoothFont(int height, LPCTSTR face);
  * 支持三种状态：正常 / 悬停 / 按下
  * 由鼠标消息驱动状态更新，自动绘制圆角矩形 + 居中文字。
  * EasyX 本身没有自带按钮，手动实现。
+ * 用了自绘的图片作为按钮背景
  */
 class Button {
 private:
