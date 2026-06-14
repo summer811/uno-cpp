@@ -366,10 +366,10 @@ bool isInRect(int mx, int my, int rx, int ry, int rw, int rh) {
  * 本函数不清屏，调用者负责在返回后重新绘制完整帧。
  */
 Color showColorPicker() {
-    const int bw = 70, bh = 50, sx = 170, sy = 270, gap = 20;
+    const int bw = 60, bh = 30, sx = 250, sy = 320, gap = 20;
     COLORREF cc[] = {RED, YELLOW, GREEN, BLUE};
     Color ec[] = {Color::Red, Color::Yellow, Color::Green, Color::Blue};
-    settextcolor(WHITE); setSmoothFont(22, _T("SimHei")); outtextxy(320, 220, _T("选颜色:"));
+    settextcolor(WHITE); setSmoothFont(18, _T("SimHei")); outtextxy(250, 300, _T("选择改变后的颜色:"));
     for (int i = 0; i < 4; i++) { setfillcolor(cc[i]); solidrectangle(sx + i * (bw + gap), sy, sx + i * (bw + gap) + bw, sy + bh); }
     FlushBatchDraw();
     while (true) {
@@ -397,7 +397,7 @@ Color showColorPicker() {
 void startGame() {
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     loadCardImages(); welcome.playMusic();
-    GameState game = createGame({"你", "AI-1", "AI-2", "AI-3"});
+    GameState game = createGame({"你", "小明", "小红", "小兰"});
     for (int i = 1; i < 4; i++) game.players[i].isBot = true;
     string msg = "游戏开始!";
     bool welcomeDone = false; DWORD musicTimer = GetTickCount(); int nextAction = 5000;
@@ -415,8 +415,34 @@ void startGame() {
         Tool::putimage_alpha(DRAW_X, DRAW_Y, &cardBack);
         settextcolor(WHITE); setSmoothFont(14, _T("SimSun"));
         outtextxy(DRAW_X, DRAW_Y + CARD_H + 5, s2w("牌堆:" + to_string(game.drawPile.size())).c_str());
-        if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) { COLORREF cm[] = {RED, YELLOW, GREEN, BLUE}; setfillcolor(cm[(int)game.currentColor]); solidcircle(370, 255, 18); }
-        settextcolor(WHITE); setSmoothFont(14, _T("SimSun")); outtextxy(355, 278, _T("颜色"));
+        //显示状态的色块
+        if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) 
+        {   
+            IMAGE st;
+            COLORREF cm[] = {RED, YELLOW, GREEN, BLUE}; 
+            if (cm[(int)game.currentColor] == RED)
+            {
+                loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)game.currentColor] == BLUE)
+            {
+                loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)game.currentColor] == YELLOW)
+            {
+                loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)game.currentColor] == GREEN)
+            {
+                loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+        }
+
+        settextcolor(WHITE); setSmoothFont(14, _T("SimSun")); outtextxy(360, 320, _T("当前颜色"));
         drawOpponents(game, 0); drawPlayerHand(game.players[0].hand);
         settextcolor(RGB(255, 215, 0)); setSmoothFont(20, _T("SimHei"));
         outtextxy(400 - textwidth(s2w(msg).c_str()) / 2, STATUS_Y - 20, s2w(msg).c_str());
@@ -443,7 +469,31 @@ void startGame() {
                 cleardevice(); putimage(0, 0, &bg);
                 if (!game.discardPile.empty()) { Card top = topDiscard(game); Tool::putimage_alpha(DISCARD_X, DISCARD_Y, &cardImages[(int)top.color][(int)top.rank]); }
                 Tool::putimage_alpha(DRAW_X, DRAW_Y, &cardBack);
-                if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) { COLORREF cm[] = {RED,YELLOW,GREEN,BLUE}; setfillcolor(cm[(int)game.currentColor]); solidcircle(370,255,18); }
+                if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) 
+                { 
+                    IMAGE st;
+                    COLORREF cm[] = { RED, YELLOW, GREEN, BLUE };
+                    if (cm[(int)game.currentColor] == RED)
+                    {
+                        loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
+                        putimage(370, 255, &st);
+                    }
+                    else if (cm[(int)game.currentColor] == BLUE)
+                    {
+                        loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
+                        putimage(370, 255, &st);
+                    }
+                    else if (cm[(int)game.currentColor] == YELLOW)
+                    {
+                        loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
+                        putimage(370, 255, &st);
+                    }
+                    else if (cm[(int)game.currentColor] == GREEN)
+                    {
+                        loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
+                        putimage(370, 255, &st);
+                    }
+                }
                 drawOpponents(game, 0); drawPlayerHand(game.players[0].hand);
                 settextcolor(RGB(255,215,0)); setSmoothFont(20,_T("SimHei"));
                 outtextxy(400 - textwidth(s2w(msg).c_str()) / 2, STATUS_Y - 20, s2w(msg).c_str());
@@ -497,11 +547,11 @@ void multipleGame() {
     }
 
     wchar_t playerName[50] = L"";
-    InputBox(playerName, 50, L"你的名字:", L"多人游戏", L"玩家");
+    InputBox(playerName, 50, L"你的名字:", L"多人游戏", L"Player");
     char nameBuf[100] = {0};
     if (wcslen(playerName) > 0)
         WideCharToMultiByte(CP_ACP, 0, playerName, -1, nameBuf, 100, nullptr, nullptr);
-    else strcpy_s(nameBuf, "玩家");
+    else strcpy_s(nameBuf, "Player");
 
     networkSend(string("JOIN|") + nameBuf);
 
@@ -647,8 +697,30 @@ void multipleGame() {
         if (gameStarted) {
             if (!localGame.discardPile.empty()) { Card top = localGame.discardPile.back(); Tool::putimage_alpha(DISCARD_X,DISCARD_Y,&cardImages[(int)top.color][(int)top.rank]); }
             Tool::putimage_alpha(DRAW_X,DRAW_Y,&cardBack);
-            if (localGame.currentColor >= Color::Red && localGame.currentColor <= Color::Blue) { COLORREF cm[]={RED,YELLOW,GREEN,BLUE}; setfillcolor(cm[(int)localGame.currentColor]); solidcircle(370,255,18); }
-            settextcolor(WHITE); setSmoothFont(12,_T("SimSun")); outtextxy(355,278,_T("颜色"));
+            if (localGame.currentColor >= Color::Red && localGame.currentColor <= Color::Blue) { 
+             IMAGE st;
+            COLORREF cm[] = {RED, YELLOW, GREEN, BLUE}; 
+            if (cm[(int)localGame.currentColor] == RED)
+            {
+                loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)localGame.currentColor] == BLUE)
+            {
+                loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)localGame.currentColor] == YELLOW)
+            {
+                loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }
+            else if (cm[(int)localGame.currentColor] == GREEN)
+            {
+                loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
+                putimage(370, 255, &st);
+            }}
+            settextcolor(WHITE); setSmoothFont(12,_T("SimSun")); outtextxy(360,320,_T("当前颜色"));
             drawOpponents(localGame, myPlayerId); drawPlayerHand(localGame.players[myPlayerId >= 0 ? myPlayerId : 0].hand);
             settextcolor(RGB(255,215,0)); setSmoothFont(18,_T("SimHei"));
             outtextxy(400 - textwidth(s2w(statusMsg).c_str())/2, STATUS_Y-20, s2w(statusMsg).c_str());

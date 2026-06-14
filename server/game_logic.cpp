@@ -166,7 +166,7 @@ void rebuildPlayerList() {
 
 /* 
  * nextPlayer — 沿链表走一步
- * dir > 0 正向 (next), dir < 0 反向 (prev)
+ * dir > 0 正  向 (next), dir < 0 反向 (prev)
  * O(1) 查找，不再扫描数组
  */
 int nextPlayer(int from, int dir) {

@@ -33,3 +33,5 @@ server/*.user
 *.tmp
 *.bak
 *.hpp
+
+*.zip
