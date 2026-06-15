@@ -1,9 +1,12 @@
-# UNO-Cpp: 基于 C++ 与 EasyX 的自绘风 UNO 纸牌游戏
+---
+
 ### ⚖️ Disclaimer / 免责声明
-**EN**: "UNO" is a registered trademark of Mattel, Inc. This project is a non-commercial, purely educational student project designed to demonstrate C++ programming and graphics capabilities. It has no affiliation with, and is not endorsed by Mattel. All code and visual assets are independently developed.
+**"UNO"** is a registered trademark of Mattel, Inc. The background music (BGM) used in this project originates from Tencent's **"Fight the Landlord" (欢乐斗地主)**. 
 
-**ZH**: "UNO" 是美泰公司（Mattel, Inc.）的注册商标。本项目为高校学生期末大作业，属于**非商业性、纯教学用途的独立开发项目**，旨在展示 C++ 编程与图形库应用。本项目与美泰公司无任何商业关联或利益往来。项目内所有代码与视觉素材均为独立原创。
+This project is a non-commercial, purely educational student assignment designed to demonstrate C++ programming and graphics capabilities. It has no affiliation with, and is not endorsed by Mattel or Tencent. All code and visual assets are independently developed.
 
+---
+# UNO-Cpp: 基于 C++ 与 EasyX 的自绘风 UNO 纸牌游戏
 > 🌐 语言 / Language: 简体中文 | [English](README.md)
 
 ## 📌 项目简介
