@@ -3,10 +3,10 @@
 
 ---
 
-### ⚖️ Disclaimer / 免责声明
-**"UNO"** is a registered trademark of Mattel, Inc. The background music (BGM) used in this project originates from Tencent's **"Fight the Landlord" (欢乐斗地主)**. 
+### ⚖️ 免责声明 / Disclaimer
+**"UNO"** 是美泰公司（Mattel, Inc.）的注册商标。本项目中所使用的背景音乐（BGM）来源于腾讯公司的经典游戏 **《欢乐斗地主》**。
 
-This project is a non-commercial, purely educational student assignment designed to demonstrate C++ programming and graphics capabilities. It has no affiliation with, and is not endorsed by Mattel or Tencent. All code and visual assets are independently developed.
+本项目为高校学生期末大作业，属于**非商业性、纯教学用途的独立开发项目**，旨在展示 C++ 编程与图形库应用。本项目与美泰公司及腾讯公司无任何商业关联、授权或利益往来。项目内所有代码与视觉素材均为团队独立原创。
 
 ---
 
