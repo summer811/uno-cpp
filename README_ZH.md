@@ -1,3 +1,6 @@
+# UNO-Cpp: 基于 C++ 与 EasyX 的自绘风 UNO 纸牌游戏
+> 🌐 语言 / Language: 简体中文 | [English](README.md)
+
 ---
 
 ### ⚖️ Disclaimer / 免责声明
@@ -6,8 +9,6 @@
 This project is a non-commercial, purely educational student assignment designed to demonstrate C++ programming and graphics capabilities. It has no affiliation with, and is not endorsed by Mattel or Tencent. All code and visual assets are independently developed.
 
 ---
-# UNO-Cpp: 基于 C++ 与 EasyX 的自绘风 UNO 纸牌游戏
-> 🌐 语言 / Language: 简体中文 | [English](README.md)
 
 ## 📌 项目简介
 本项目为 C++ 实践课的期末大作业。我们团队在 C++ 的基础上，利用 EasyX 图形库从零实现了经典桌游 UNO（优诺牌）的核心逻辑与可视化界面。
