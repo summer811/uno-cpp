@@ -75,6 +75,30 @@ int hitTestCard(int mx, int my, int handSize);
 bool isInRect(int mx, int my, int rx, int ry, int rw, int rh);
 Color showColorPicker();
 void setSmoothFont(int height, LPCTSTR face);
+void showInterlude();  // 过场动画函数声明
+
+/*
+ * showInterlude —— 显示过场动画
+ * 在页面切换时显示 interlude.png 图片
+ */
+void showInterlude() {
+    IMAGE interlude;
+    IMAGE currentScreen(800, 600);
+
+    // 保存当前屏幕内容
+    getimage(&currentScreen, 0, 0, 800, 600);
+
+    // 加载过场图片
+    loadimage(&interlude, _T("Assets/Picture/interlude.png"), 800, 600, true);
+
+    // 如果过场图片加载成功
+    if (interlude.getwidth() > 0 && interlude.getheight() > 0) {
+        // 使用 putimage_alpha 绘制带透明度的过场图片
+        Tool::putimage_alpha(0, 0, 800, 600, &interlude);
+        FlushBatchDraw();
+        Sleep(350);
+    }
+}
 
 /*
  * Button 类 —— 通用按钮控件
@@ -97,8 +121,6 @@ private:
     static int _maskW, _maskH;
 
     // 根据当前 bgp_num 加载对应的按钮背景图
-    // 命名规则: Assets/Button/bu1_{n}.jpg, bu2_{n}.jpg  (n = bgp_num + 1)
-    // 例: bgp_num=0 → bu1_1.jpg / bu2_1.jpg,  bgp_num=1 → bu1_2.jpg / bu2_2.jpg
     static void _loadImagesForBg() {
         const int BW = 200, BH = 60;
 
@@ -281,9 +303,7 @@ bool showExitConfirm() {
 }
 
 /*
- * setSmoothFont —— 设置带 ClearType 抗锯齿的字体
- * 使用 EasyX 的 LOGFONT 结构体 + settextstyle 实现。
- * 参数 face 传字体名称（如 SimSun/SimHei）。
+ * setSmoothFont —— 设置带 ClearType 抗锯齿的字体，ai辅助生成
  */
 void setSmoothFont(int height, LPCTSTR face) {
     LOGFONT lf = { 0 };
@@ -295,16 +315,11 @@ void setSmoothFont(int height, LPCTSTR face) {
     settextstyle(&lf);
 }
 
-void openMenu();
-
 /*
  * openSetting —— 设置界面
  * 左栏：音量控制（6 档：静音/20%/40%/60%/80%/100%）
  * 中栏：卡牌皮肤（4 套皮肤）
  * 右栏：背景切换（4 套背景图）
- * 点击音量按钮调用 music::adjustCurrentVolume 实时调整。
- * 点击背景按钮修改全局 g_backgroundPath。
- * 点击皮肤按钮修改全局 skin_num 并重新加载卡牌图片。
  */
 void openSetting() {
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
@@ -332,6 +347,7 @@ void openSetting() {
     ExMessage msg; bool running = true;
     while (running) {
         while (peekmessage(&msg, EM_MOUSE)) {
+            //接收鼠标按下的消息
             vol0.handleMessage(msg); vol20.handleMessage(msg); vol40.handleMessage(msg);
             vol60.handleMessage(msg); vol80.handleMessage(msg); vol100.handleMessage(msg);
             bgp1.handleMessage(msg); bgp2.handleMessage(msg); bgp3.handleMessage(msg);
@@ -339,7 +355,8 @@ void openSetting() {
             skin1.handleMessage(msg); skin2.handleMessage(msg); skin3.handleMessage(msg);
             skin4.handleMessage(msg);
             exitSetting.handleMessage(msg);
-
+            
+            //处理鼠标的消息
             // 音量控制
             if (vol0.isClicked(msg)) { music::adjustCurrentVolume(0); outtextxy(350, 500, _T("已静音")); FlushBatchDraw(); Sleep(500); }
             if (vol20.isClicked(msg)) { music::adjustCurrentVolume(200); outtextxy(350, 500, _T("20%")); FlushBatchDraw(); Sleep(500); }
@@ -350,6 +367,7 @@ void openSetting() {
 
             // 背景切换
             if (bgp1.isClicked(msg)) {
+                showInterlude();
                 g_backgroundPath = _T("Assets/Picture/bg.jpg");
                 loadimage(&bg, g_backgroundPath, 800, 600);
                 outtextxy(350, 500, _T("背景1"));
@@ -358,6 +376,7 @@ void openSetting() {
                 Button::reloadImages();
             }
             if (bgp2.isClicked(msg)) {
+                showInterlude();
                 g_backgroundPath = _T("Assets/Picture/bg2.jpg");
                 loadimage(&bg, g_backgroundPath, 800, 600);
                 outtextxy(350, 500, _T("背景2"));
@@ -366,6 +385,7 @@ void openSetting() {
                 Button::reloadImages();
             }
             if (bgp3.isClicked(msg)) {
+                showInterlude();
                 g_backgroundPath = _T("Assets/Picture/bg3.jpg");
                 loadimage(&bg, g_backgroundPath, 800, 600);
                 outtextxy(350, 500, _T("背景3"));
@@ -374,6 +394,7 @@ void openSetting() {
                 Button::reloadImages();
             }
             if (bgp4.isClicked(msg)) {
+                showInterlude();
                 g_backgroundPath = _T("Assets/Picture/bg4.jpg");
                 loadimage(&bg, g_backgroundPath, 800, 600);
                 outtextxy(350, 500, _T("背景4"));
@@ -384,24 +405,28 @@ void openSetting() {
 
             // 卡牌皮肤切换
             if (skin1.isClicked(msg)) {
+                showInterlude();
                 skin_num = 0;
                 loadCardImages();
                 outtextxy(350, 500, _T("经典皮肤已应用"));
                 FlushBatchDraw(); Sleep(500);
             }
             if (skin2.isClicked(msg)) {
+                showInterlude();
                 skin_num = 1;
                 loadCardImages();
                 outtextxy(350, 500, _T("皮肤2已应用"));
                 FlushBatchDraw(); Sleep(500);
             }
             if (skin3.isClicked(msg)) {
+                showInterlude();
                 skin_num = 2;
                 loadCardImages();
                 outtextxy(350, 500, _T("皮肤3已应用"));
                 FlushBatchDraw(); Sleep(500);
             }
             if (skin4.isClicked(msg)) {
+                showInterlude();
                 skin_num = 3;
                 loadCardImages();
                 outtextxy(350, 500, _T("皮肤4已应用"));
@@ -431,11 +456,6 @@ void openSetting() {
 
 /*
  * loadCardImages —— 从 Assets/CardImg/ 加载所有卡牌图片
- * 图片命名规则：{颜色}_{点数}.png
- *   颜色：red / yellow / green / blue / black（万能牌）
- *   点数：0-9 / Skip / Reverse / Draw Two / Wild / Wild Draw Four
- * 所有牌加载到全局 cardImages[5][15] 二维缓存中。
- * cardBack 单独存储牌背图片。
  * 支持多套皮肤：skin_num 决定加载哪个子文件夹
  */
 void loadCardImages() {
@@ -463,7 +483,6 @@ void loadCardImages() {
         for (int n = 0; n <= 9; n++) {
             _stprintf_s(p, _countof(p), _T("%s%s_%d.png"), skinFolder, cn[c], n);
             loadimage(&cardImages[c][n], p, CARD_W, CARD_H);
-            // 如果加载失败，尝试从默认路径加载
             if (cardImages[c][n].getwidth() == 0) {
                 _stprintf_s(p, _countof(p), _T("Assets/CardImg/%s_%d.png"), cn[c], n);
                 loadimage(&cardImages[c][n], p, CARD_W, CARD_H);
@@ -503,7 +522,6 @@ void loadCardImages() {
         loadimage(&cardImages[4][14], _T("Assets/CardImg/black_Wild Draw Four.png"), CARD_W, CARD_H);
     }
 
-    // 加载牌背（也支持皮肤）
     _stprintf_s(p, _countof(p), _T("%scard_back.png"), skinFolder);
     loadimage(&cardBack, p, CARD_W, CARD_H);
     if (cardBack.getwidth() == 0) {
@@ -513,9 +531,6 @@ void loadCardImages() {
 
 /*
  * drawPlayerHand —— 在屏幕底部绘制玩家手牌
- * 动态计算牌间距 gap，保证所有手牌在 780px 内显示。
- * 手牌少时 gap=68px（牌间留 8px 空隙），多时自动压缩。
- * 整行水平居中，使用带 alpha 透明的 putimage_alpha。
  */
 void drawPlayerHand(const vector<Card>& hand) {
     if (hand.empty()) return;
@@ -530,9 +545,6 @@ void drawPlayerHand(const vector<Card>& hand) {
 
 /*
  * drawOpponents —— 绘制对手信息
- * 三名对手分别显示在顶部左(30)、中(300)、右(580)三个位置。
- * 每个对手显示：名字（当前轮到的蓝色高亮）、牌背叠放、手牌数量。
- * 参数 myIndex 用于跳过玩家自己的绘制。
  */
 void drawOpponents(const GameState& game, int myIndex) {
     int xp[] = { 30, 300, 580 };
@@ -554,6 +566,10 @@ void drawOpponents(const GameState& game, int myIndex) {
     }
 }
 
+
+/*
+ *  hitTestCard — 手牌点击命中测试
+*/
 int hitTestCard(int mx, int my, int handSize) {
     if (my < HAND_Y || my > HAND_Y + PLAYER_CARD_H) return -1;
     if (handSize <= 0) return -1;
@@ -563,15 +579,15 @@ int hitTestCard(int mx, int my, int handSize) {
     return -1;
 }
 
+/*
+ *  isInRect — 通用矩形碰撞检测
+*/
 bool isInRect(int mx, int my, int rx, int ry, int rw, int rh) {
     return mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh;
 }
 
 /*
  * showColorPicker —— 出万能牌时的颜色选择器
- * 在当前画面之上叠加四个颜色方块（红/黄/绿/蓝）。
- * 等待玩家点击后返回所选 Color 枚举值。
- * 本函数不清屏，调用者负责在返回后重新绘制完整帧。
  */
 Color showColorPicker() {
     const int bw = 60, bh = 30, sx = 250, sy = 320, gap = 20;
@@ -592,17 +608,9 @@ Color showColorPicker() {
 
 /*
  * startGame —— 单人游戏主循环
- * 1. 初始化：加载背景和卡牌、创建 GameState（1人+3AI）
- * 2. 背景音乐状态机：
- *    - welcome 播 30 秒 → 切 normal/normal2 轮替
- *    - 玩家手牌<=2时切 exciting
- *    - 游戏结束播 win/lose
- * 3. 游戏循环：
- *    - AI 回合：botTakeTurn 自动决策
- *    - 玩家回合：等待鼠标点击（出牌/抽牌）
- *    - 支持万能牌颜色选择器
  */
 void startGame() {
+    showInterlude();
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     loadCardImages(); welcome.playMusic();
     GameState game = createGame({ "你", "小明", "小红", "小兰" });
@@ -611,11 +619,8 @@ void startGame() {
     bool welcomeDone = false; DWORD musicTimer = GetTickCount(); int nextAction = 5000;
     bool useNormal2 = false; bool inExciting = false;
 
-    // 创建退出按钮（右上角）
     Button exitBtn(720, 10, 60, 35, _T("退出"), 0);
     exitBtn.setFontSize(16);
-
-    // 退出标志
     bool exitRequested = false;
 
     BeginBatchDraw();
@@ -631,28 +636,23 @@ void startGame() {
         Tool::putimage_alpha(DRAW_X, DRAW_Y, &cardBack);
         settextcolor(WHITE); setSmoothFont(14, _T("SimSun"));
         outtextxy(DRAW_X, DRAW_Y + CARD_H + 5, s2w("牌堆:" + to_string(game.drawPile.size())).c_str());
-        //显示状态的色块
-        if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue)
-        {
+
+        if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) {
             IMAGE st;
             COLORREF cm[] = { RED, YELLOW, GREEN, BLUE };
-            if (cm[(int)game.currentColor] == RED)
-            {
+            if (cm[(int)game.currentColor] == RED) {
                 loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
                 putimage(370, 255, &st);
             }
-            else if (cm[(int)game.currentColor] == BLUE)
-            {
+            else if (cm[(int)game.currentColor] == BLUE) {
                 loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
                 putimage(370, 255, &st);
             }
-            else if (cm[(int)game.currentColor] == YELLOW)
-            {
+            else if (cm[(int)game.currentColor] == YELLOW) {
                 loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
                 putimage(370, 255, &st);
             }
-            else if (cm[(int)game.currentColor] == GREEN)
-            {
+            else if (cm[(int)game.currentColor] == GREEN) {
                 loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
                 putimage(370, 255, &st);
             }
@@ -662,13 +662,9 @@ void startGame() {
         drawOpponents(game, 0); drawPlayerHand(game.players[0].hand);
         settextcolor(RGB(255, 215, 0)); setSmoothFont(20, _T("SimHei"));
         outtextxy(400 - textwidth(s2w(msg).c_str()) / 2, STATUS_Y - 20, s2w(msg).c_str());
-
-        // 绘制退出按钮
         exitBtn.draw();
-
         FlushBatchDraw();
 
-        // 处理鼠标事件（包括退出按钮）
         ExMessage em;
         while (peekmessage(&em, EM_MOUSE)) {
             exitBtn.handleMessage(em);
@@ -677,13 +673,10 @@ void startGame() {
                     exitRequested = true;
                     break;
                 }
-                // 清除残留的鼠标消息
                 { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} }
             }
         }
-        if (exitRequested) {
-            break;  // 退出游戏循环，返回主菜单
-        }
+        if (exitRequested) break;
 
         if (game.players[game.currentPlayer].isBot) {
             int ai = game.currentPlayer; msg = game.players[ai].name + " 思考中..."; FlushBatchDraw(); Sleep(600);
@@ -695,10 +688,9 @@ void startGame() {
         else {
             msg = "轮到你了!"; FlushBatchDraw();
             bool acted = false;
-            { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} } // 清空AI回合积累的鼠标事件
+            { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} }
             while (!acted && !hasWinner(game) && !exitRequested) {
                 while (peekmessage(&em, EM_MOUSE)) {
-                    // 在玩家回合也检测退出按钮
                     exitBtn.handleMessage(em);
                     if (exitBtn.isClicked(em)) {
                         if (showExitConfirm()) {
@@ -708,38 +700,53 @@ void startGame() {
                         { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} }
                     }
                     if (exitRequested) break;
-
                     if (em.message != WM_LBUTTONUP) continue;
                     int hit = hitTestCard(em.x, em.y, (int)game.players[0].hand.size());
-                    if (hit >= 0) { Card card = game.players[0].hand[hit]; if (canPlay(card, topDiscard(game), game.currentColor)) { Color ch = Color::None; if (isWildCard(card)) ch = showColorPicker(); if (playCard(game, 0, hit, ch)) { msg = "出了 " + cardToString(card); if (isWildCard(card)) msg += " 选" + colorToString(ch); acted = true; } } else { msg = "不能出!"; } break; }
-                    if (isInRect(em.x, em.y, DRAW_X, DRAW_Y, CARD_W, CARD_H)) { drawCards(game, 0, 1); msg = "抽了一张"; if (!game.players[0].hand.empty()) { Card& dn = game.players[0].hand.back(); if (canPlay(dn, topDiscard(game), game.currentColor)) msg += "(可出)"; else { moveToNextPlayer(game, 1); acted = true; } } break; }
+                    if (hit >= 0) {
+                        Card card = game.players[0].hand[hit];
+                        if (canPlay(card, topDiscard(game), game.currentColor)) {
+                            Color ch = Color::None;
+                            if (isWildCard(card)) ch = showColorPicker();
+                            if (playCard(game, 0, hit, ch)) {
+                                msg = "出了 " + cardToString(card);
+                                if (isWildCard(card)) msg += " 选" + colorToString(ch);
+                                acted = true;
+                            }
+                        }
+                        else { msg = "不能出!"; }
+                        break;
+                    }
+                    if (isInRect(em.x, em.y, DRAW_X, DRAW_Y, CARD_W, CARD_H)) {
+                        drawCards(game, 0, 1);
+                        msg = "抽了一张";
+                        if (!game.players[0].hand.empty()) {
+                            Card& dn = game.players[0].hand.back();
+                            if (canPlay(dn, topDiscard(game), game.currentColor)) msg += "(可出)";
+                            else { moveToNextPlayer(game, 1); acted = true; }
+                        }
+                        break;
+                    }
                 }
                 if (exitRequested) break;
-
                 cleardevice(); putimage(0, 0, &bg);
                 if (!game.discardPile.empty()) { Card top = topDiscard(game); Tool::putimage_alpha(DISCARD_X, DISCARD_Y, &cardImages[(int)top.color][(int)top.rank]); }
                 Tool::putimage_alpha(DRAW_X, DRAW_Y, &cardBack);
-                if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue)
-                {
+                if (game.currentColor >= Color::Red && game.currentColor <= Color::Blue) {
                     IMAGE st;
                     COLORREF cm[] = { RED, YELLOW, GREEN, BLUE };
-                    if (cm[(int)game.currentColor] == RED)
-                    {
+                    if (cm[(int)game.currentColor] == RED) {
                         loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
                         putimage(370, 255, &st);
                     }
-                    else if (cm[(int)game.currentColor] == BLUE)
-                    {
+                    else if (cm[(int)game.currentColor] == BLUE) {
                         loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
                         putimage(370, 255, &st);
                     }
-                    else if (cm[(int)game.currentColor] == YELLOW)
-                    {
+                    else if (cm[(int)game.currentColor] == YELLOW) {
                         loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
                         putimage(370, 255, &st);
                     }
-                    else if (cm[(int)game.currentColor] == GREEN)
-                    {
+                    else if (cm[(int)game.currentColor] == GREEN) {
                         loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
                         putimage(370, 255, &st);
                     }
@@ -755,7 +762,6 @@ void startGame() {
     }
 
     if (!exitRequested) {
-        // 游戏正常结束，显示获胜界面
         int wi = winnerIndex(game); if (wi == 0) win.playMusic(); else lose.playMusic();
         cleardevice(); putimage(0, 0, &bg);
         settextcolor(RGB(255, 215, 0)); setSmoothFont(40, _T("SimHei"));
@@ -780,19 +786,9 @@ void startGame() {
 
 /*
  * multipleGame —— 多人游戏主逻辑
- * 1. 通过 InputBox 获取服务端地址 → networkConnect
- * 2. 发送 JOIN 消息加入游戏，在等待房显示玩家列表
- * 3. 管理员在服务端输入 op start 后开始游戏
- * 4. 接收服务端消息并更新本地 GameState 镜像：
- *    - STATE：更新当前颜色、方向、当前玩家、弃牌堆顶牌
- *    - HAND：更新玩家手牌
- *    - YOUR_TURN：允许鼠标交互（出牌/抽牌）
- *    - ACTION：显示其他玩家的操作
- *    - WINNER：游戏结束，播 win/lose 音效
- * 5. ESC 退出 / 断连自动返回主菜单
- * 6. 背景音乐状态机与单人模式相同
  */
 void multipleGame() {
+    showInterlude();
     wchar_t addr[100] = L"";
     InputBox(addr, 100, L"服务器地址:", L"多人连接", L"127.0.0.1:8888");
     if (wcslen(addr) == 0) return;
@@ -828,14 +824,12 @@ void multipleGame() {
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     loadCardImages();
 
-    // 创建退出按钮（右上角）
     Button exitBtn(720, 10, 60, 35, _T("退出"), 0);
     exitBtn.setFontSize(16);
 
     BeginBatchDraw();
 
     while (networkIsConnected() && !quitGame) {
-        // BGM update
         {
             DWORD now = GetTickCount();
             if (gameStarted) {
@@ -853,7 +847,6 @@ void multipleGame() {
             }
         }
 
-        // Network messages
         string msg;
         while (networkRecv(msg, 0)) {
             size_t p = msg.find('|');
@@ -861,8 +854,7 @@ void multipleGame() {
             string rest = (p == string::npos) ? "" : msg.substr(p + 1);
 
             if (cmd == "WELCOME") { myPlayerId = stoi(rest); }
-            else if (cmd == "GAME_START")
-            {
+            else if (cmd == "GAME_START") {
                 gameStarted = true;
                 statusMsg = "游戏开始!";
                 localGame.players.resize(4);
@@ -893,14 +885,12 @@ void multipleGame() {
             }
             else if (cmd == "HAND") {
                 int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
-                printf("[CLIENT] HAND received -> slot %d\n", hidx);
                 localGame.players[hidx].hand.clear(); std::istringstream ss(rest); string cs;
                 string rm2[] = { "0","1","2","3","4","5","6","7","8","9","Skip","Reverse","DrawTwo","Wild","WildDrawFour" };
                 Rank rv2[] = { Rank::Num0,Rank::Num1,Rank::Num2,Rank::Num3,Rank::Num4,Rank::Num5,Rank::Num6,Rank::Num7,Rank::Num8,Rank::Num9,Rank::Skip,Rank::Reverse,Rank::DrawTwo,Rank::Wild,Rank::WildDrawFour };
                 while (getline(ss, cs, '|')) {
                     Card c; size_t u = cs.find('_');
                     if (u == string::npos) {
-                        // 万能牌无下划线：Wild / WildDrawFour
                         if (cs == "Wild") { c.color = Color::Wild; c.rank = Rank::Wild; }
                         else if (cs == "WildDrawFour") { c.color = Color::Wild; c.rank = Rank::WildDrawFour; }
                         else continue;
@@ -917,17 +907,16 @@ void multipleGame() {
             }
             else if (cmd == "YOUR_TURN") {
                 myTurn = true; acted = false;
-                // 保留刚才 ACTION 里显示的出牌信息
                 if (statusMsg.empty() || statusMsg.find("出了") == string::npos)
                     statusMsg = "轮到你了!";
-                { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} } // 清空回合外积累的鼠标事件
+                { ExMessage _tmp; while (peekmessage(&_tmp, EM_MOUSE)) {} }
                 Card top = localGame.discardPile.empty() ? Card{ Color::None,Rank::Num0 } : localGame.discardPile.back();
                 int hidx = (myPlayerId >= 0) ? myPlayerId : 0;
                 bool hp = false; for (Card& c : localGame.players[hidx].hand) if (canPlay(c, top, localGame.currentColor)) { hp = true; break; }
                 if (!hp) { networkSend("DRAW"); acted = true; myTurn = false; statusMsg = "没牌出,自动抽牌..."; }
             }
             else if (cmd == "ACTION") { std::istringstream ss(rest); string sid, at, ac, ac2; getline(ss, sid, '|'); getline(ss, at, '|'); getline(ss, ac, '|'); getline(ss, ac2); int ap = stoi(sid); if (at == "TURN") statusMsg = playerNames[ap] + " 的回合"; else if (at == "PLAY") { statusMsg = playerNames[ap] + " 出了 " + ac; if (!ac2.empty())statusMsg += " " + ac2; } else if (at == "DRAW") statusMsg = playerNames[ap] + " 抽牌"; }
-            else if (cmd == "OPPONENT_HAND") { std::istringstream ss(rest); string sid, sn; getline(ss, sid, '|'); getline(ss, sn); int oid = stoi(sid), cnt = stoi(sn); printf("[CLIENT] OPP_HAND: oid=%d cnt=%d myId=%d\n", oid, cnt, myPlayerId); if (oid >= 0 && oid < 4 && oid != myPlayerId) { localGame.players[oid].hand.resize(cnt); printf("[CLIENT] -> players[%d].hand.size()=%zu\n", oid, localGame.players[oid].hand.size()); } }
+            else if (cmd == "OPPONENT_HAND") { std::istringstream ss(rest); string sid, sn; getline(ss, sid, '|'); getline(ss, sn); int oid = stoi(sid), cnt = stoi(sn); if (oid >= 0 && oid < 4 && oid != myPlayerId) { localGame.players[oid].hand.resize(cnt); } }
             else if (cmd == "WINNER") { std::istringstream ss(rest); string wid, wn; getline(ss, wid, '|'); getline(ss, wn); std::wstring wW(wn.begin(), wn.end()); if (myPlayerId == stoi(wid)) win.playMusic(); else lose.playMusic(); MessageBox(GetHWnd(), (wW + L" 获胜!").c_str(), _T("游戏结束"), MB_OK); gameStarted = false; break; }
             else if (cmd == "ERROR") { if (rest == "Kicked") { networkDisconnect(); break; } statusMsg = "错误:" + rest; }
             else if (cmd == "MSG") { statusMsg = rest; }
@@ -935,7 +924,6 @@ void multipleGame() {
 
         if (!networkIsConnected()) break;
 
-        // Input: 键盘 + 鼠标（使用 EasyX 图形窗口消息，而非 _kbhit 控制台输入）
         {
             ExMessage em;
             while (peekmessage(&em, EM_MOUSE | EM_KEY)) {
@@ -945,7 +933,6 @@ void multipleGame() {
                         break;
                     }
                 }
-                // 检测退出按钮
                 exitBtn.handleMessage(em);
                 if (exitBtn.isClicked(em)) {
                     if (showExitConfirm()) {
@@ -973,7 +960,6 @@ void multipleGame() {
             }
         }
 
-        // Render
         cleardevice(); putimage(0, 0, &bg);
         if (gameStarted) {
             if (!localGame.discardPile.empty()) { Card top = localGame.discardPile.back(); Tool::putimage_alpha(DISCARD_X, DISCARD_Y, &cardImages[(int)top.color][(int)top.rank]); }
@@ -981,23 +967,19 @@ void multipleGame() {
             if (localGame.currentColor >= Color::Red && localGame.currentColor <= Color::Blue) {
                 IMAGE st;
                 COLORREF cm[] = { RED, YELLOW, GREEN, BLUE };
-                if (cm[(int)localGame.currentColor] == RED)
-                {
+                if (cm[(int)localGame.currentColor] == RED) {
                     loadimage(&st, _T("Assets/Picture/st_red.jpg"), 45, 45);
                     putimage(370, 255, &st);
                 }
-                else if (cm[(int)localGame.currentColor] == BLUE)
-                {
+                else if (cm[(int)localGame.currentColor] == BLUE) {
                     loadimage(&st, _T("Assets/Picture/st_blue.jpg"), 45, 45);
                     putimage(370, 255, &st);
                 }
-                else if (cm[(int)localGame.currentColor] == YELLOW)
-                {
+                else if (cm[(int)localGame.currentColor] == YELLOW) {
                     loadimage(&st, _T("Assets/Picture/st_yellow.jpg"), 45, 45);
                     putimage(370, 255, &st);
                 }
-                else if (cm[(int)localGame.currentColor] == GREEN)
-                {
+                else if (cm[(int)localGame.currentColor] == GREEN) {
                     loadimage(&st, _T("Assets/Picture/st_green.jpg"), 45, 45);
                     putimage(370, 255, &st);
                 }
@@ -1016,7 +998,6 @@ void multipleGame() {
             }
             setSmoothFont(12, _T("SimSun")); outtextxy(250, y + 10, _T("ESC 退出"));
         }
-        // 绘制退出按钮
         exitBtn.draw();
         FlushBatchDraw(); Sleep(16);
     }
@@ -1026,12 +1007,26 @@ void multipleGame() {
 
 /*
  * openMenu —— 主菜单
- * 四个按钮：单人游戏 / 多人游戏 / 设置 / 退出游戏
- * 每个按钮点击后打开对应界面，返回后刷新背景。
- * 程序入口 main() 直接调用 openMenu()。
  */
 void openMenu() {
-    initgraph(800, 600, NOCLOSE);
+    initgraph(800, 600);
+
+    // ===== 设置窗口图标（代码方式，不需要 .rc 文件）=====
+    HICON hIcon = (HICON)LoadImage(
+        NULL,
+        _T("Assets/head.ico"),
+        IMAGE_ICON,
+        0,
+        0,
+        LR_LOADFROMFILE
+    );
+
+    if (hIcon != NULL) {
+        SendMessage(GetHWnd(), WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+        SendMessage(GetHWnd(), WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+    }
+    // ===== 图标设置结束 =====
+
     IMAGE bg; loadimage(&bg, g_backgroundPath, 800, 600);
     BeginBatchDraw();
     Button sp(300, 140, 200, 60, _T("单人游戏"), 0);
@@ -1042,9 +1037,9 @@ void openMenu() {
     while (running) {
         while (peekmessage(&msg, EM_MOUSE)) {
             sp.handleMessage(msg); mp.handleMessage(msg); st.handleMessage(msg); ex.handleMessage(msg);
-            if (sp.isClicked(msg)) { startGame(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
-            if (mp.isClicked(msg)) { multipleGame(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
-            if (st.isClicked(msg)) { openSetting(); Button::reloadImages(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
+            if (sp.isClicked(msg)) { startGame(); showInterlude(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
+            if (mp.isClicked(msg)) { multipleGame(); showInterlude(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
+            if (st.isClicked(msg)) { openSetting(); showInterlude(); Button::reloadImages(); loadimage(&bg, g_backgroundPath, 800, 600); FlushBatchDraw(); Sleep(500); }
             if (ex.isClicked(msg)) running = false;
         }
         cleardevice(); putimage(0, 0, &bg); sp.draw(); mp.draw(); st.draw(); ex.draw();

@@ -192,6 +192,7 @@ int main() {
         if (result == SOCKET_ERROR) { printf("select error\n"); break; }
         if (result == 0) continue;
 
+        //玩家连接处理
         if (FD_ISSET(listenSock, &readSet)) {
             sockaddr_in clientAddr; int addrLen = sizeof(clientAddr);
             SOCKET clientSock = accept(listenSock, (sockaddr*)&clientAddr, &addrLen);
@@ -221,6 +222,8 @@ int main() {
             if (!g_game.players[i].connected || g_game.players[i].socket == INVALID_SOCKET) continue;
             if (!FD_ISSET(g_game.players[i].socket, &readSet)) continue;
             std::string line;
+
+            //玩家离线处理
             if (!recvLine(g_game.players[i].socket, line)) {
                 if (g_game.gameStarted) serverBroadcast("MSG|" + g_game.players[i].name + " disconnected");
                 g_game.players[i].connected = false;
