@@ -40,7 +40,7 @@
 ### 2. 克隆仓库
 打开您的终端（Terminal）或 Git Bash，执行以下命令：
 ```bash
-git clone [https://github.com/summer811/uno-cpp.git](https://github.com/summer811/uno-cpp.git)
+git clone https://github.com/summer811/uno-cpp.git
 cd uno-cpp
 ```
 ### 3. 编译与运行
@@ -48,6 +48,7 @@ cd uno-cpp
 双击 uno-cpp.sln，系统会自动拉起 Visual Studio 2022。
 在 Visual Studio 顶部工具栏中，确保解决方案配置选择的是 Debug 或 Release，平台选择的是 x64（或根据你们项目实际情况选择 x86）。
 按下快捷键 Ctrl + F5（或点击顶部的“本地 Windows 调试器”）即可编译并启动游戏！
+
 ###📄 开源协议
 本项目采用 仅供非商业性教育用途使用（Non-Commercial Educational Use Only） 的许可声明。
 游戏内所有自绘卡牌及美术资源版权归本团队成员所有，欢迎用于开源学习与交流。
