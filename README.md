@@ -1,3 +1,4 @@
+[简体中文](README_ZH.md) | English
 # UNO-Cpp: A Custom-Art UNO Card Game Built with C++ and EasyX
 
 ## 📌 Project Overview
